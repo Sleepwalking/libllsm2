@@ -1,7 +1,7 @@
 #include "../llsm.h"
 #include "../dsputils.h"
 #include "../external/ciglet/ciglet.h"
-#include <assert.h>
+#include "verify-utils.h"
 
 #define assert_equal(a, b) \
   assert(approx_equal(a, b))
@@ -165,6 +165,8 @@ static void test_glottal_model() {
 }
 
 int main() {
+  srand(1);
+  test_empirical_kld();
   test_spectral_envelope();
   test_harmonic_analysis(LLSM_AOPTION_HMPP);
   test_glottal_model();

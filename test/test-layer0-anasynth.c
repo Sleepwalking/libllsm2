@@ -1,6 +1,6 @@
 #include "../llsm.h"
-#include "../external/ciglet/ciglet.h"
 #include "../external/libpyin/pyin.h"
+#include "verify-utils.h"
 
 int main() {
   int fs = 0;
@@ -14,20 +14,25 @@ int main() {
   param.fmin = 50.0;
   param.fmax = 500.0;
   param.trange = 24;
-  param.bias = 10;
+  param.bias = 2;
   param.nf = ceil(fs * 0.025);
   FP_TYPE* f0 = pyin_analyze(param, x, nx, fs, & nfrm);
 
   llsm_aoptions* opt_a = llsm_create_aoptions();
   opt_a -> thop = (FP_TYPE)nhop / fs;
+  llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 
-  // llsm_chunk_tolayer1(chunk, 2048);
-  // llsm_chunk_tolayer0(chunk);
-
-  llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_output* out = llsm_synthesize(opt_s, chunk);
-  wavwrite(out -> y, out -> ny, opt_s -> fs, 24, "out.wav");
+  wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
+    "test/test-layer0-noise.wav");
+  wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
+    "test/test-layer0-sin.wav");
+  wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
+    "test/test-layer0.wav");
+
+  verify_data_distribution(x, nx, out -> y, out -> ny);
+  verify_spectral_distribution(x, nx, out -> y, out -> ny);
 
   llsm_delete_output(out);
   llsm_delete_chunk(chunk);
