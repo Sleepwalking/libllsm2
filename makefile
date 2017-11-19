@@ -10,7 +10,8 @@ OUT_DIR = ./build
 OBJS = $(OUT_DIR)/container.o \
   $(OUT_DIR)/frame.o \
   $(OUT_DIR)/dsputils.o \
-  $(OUT_DIR)/layer0.o
+  $(OUT_DIR)/layer0.o \
+  $(OUT_DIR)/layer1.o
 TARGET_A = $(OUT_DIR)/libllsm.a
 
 CIGLET_DIR = ./external/ciglet
@@ -42,6 +43,7 @@ $(OUT_DIR)/frame.o: llsm.h
 $(OUT_DIR)/container.o: llsm.h
 $(OUT_DIR)/dsputils.o: dsputils.h
 $(OUT_DIR)/layer0.o: llsm.h dsputils.h
+$(OUT_DIR)/layer1.o: llsm.h dsputils.h
 
 $(CIGLET_O): $(CIGLET_SRC)
 	mkdir -p $(OUT_DIR)
