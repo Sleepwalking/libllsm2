@@ -27,14 +27,18 @@ default: $(TARGET_A)
 test: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-dsputils \
 	  $(OUT_DIR)/test-layer0-anasynth \
+	  $(OUT_DIR)/test-layer0-edgecase \
 	  $(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-layer0-anasynth
+	$(OUT_DIR)/test-layer0-edgecase
 	$(OUT_DIR)/test-layer1-anasynth
 
-test-layer0: $(OUT_DIR)/test-layer0-anasynth
+test-layer0: $(OUT_DIR)/test-layer0-anasynth \
+	  $(OUT_DIR)/test-layer0-edgecase
 	$(OUT_DIR)/test-layer0-anasynth
+	$(OUT_DIR)/test-layer0-edgecase
 
 test-layer1: $(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-layer1-anasynth

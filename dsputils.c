@@ -70,8 +70,9 @@ void llsm_compute_spectrogram(FP_TYPE* x, int nx, int* center, int* winsize,
   //   then scale the factor for each frame.
   int standard_winsize = 1024;
   FP_TYPE standard_normalizer = 0;
-  cig_stft_forward(x, nx, center, & standard_winsize, 1, nfft, wintype, 0, 2,
-    NULL, & standard_normalizer, dst_spec, dst_phse);
+  if(nfrm > 0)
+    cig_stft_forward(x, nx, center, & standard_winsize, 1, nfft, wintype, 0, 2,
+      NULL, & standard_normalizer, dst_spec, dst_phse);
   standard_normalizer *= 0.5;
 
   // The actual STFT analysis.
