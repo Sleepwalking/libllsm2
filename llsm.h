@@ -20,6 +20,7 @@ FP_TYPE* llsm_copy_fparray(FP_TYPE* src);
 void     llsm_delete_fp(FP_TYPE* dst);
 void     llsm_delete_int(int* dst);
 void     llsm_delete_fparray(FP_TYPE* dst);
+int      llsm_fparray_length(FP_TYPE* src);
 /** @} */
 
 /** @defgroup group_container llsm_container
@@ -153,6 +154,8 @@ llsm_container* llsm_create_frame(int nhar, int nchannel, int nhar_e,
 void llsm_frame_tolayer0(llsm_container* dst, llsm_container* conf);
 /** @brief An extension of llsm_hmframe_phaseshift to LLSM frames. */
 void llsm_frame_phaseshift(llsm_container* dst, FP_TYPE theta);
+/** @brief Convert from absolute phase to relative phase shift (RPS). */
+void llsm_frame_phasesync_rps(llsm_container* dst, int layer1_based);
 /** @brief Verify if the frame contains the information necessary for layer 0
  *    representation. */
 int llsm_frame_checklayer0(llsm_container* src);
@@ -245,6 +248,10 @@ void llsm_chunk_tolayer1(llsm_chunk* dst, int nfft);
 /** @brief Build the layer 0 harmonic model representation from an existing
  *    layer 1 representation. */
 void llsm_chunk_tolayer0(llsm_chunk* dst);
+/** @brief An extension of llsm_frame_phasesync_rps to LLSM chunks. */
+void llsm_chunk_phasesync_rps(llsm_chunk* dst, int layer1_based);
+/** @brief Add or subtract the integration of F0 to/from the phase vectors. */
+void llsm_chunk_phasepropagate(llsm_chunk* dst, int sign);
 /** @brief Get F0 and number of frames from a parameter chunk. */
 FP_TYPE* llsm_chunk_getf0(llsm_chunk* src, int* dst_nfrm);
 

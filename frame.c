@@ -120,17 +120,31 @@ llsm_container* llsm_create_frame(int nhar, int nchannel, int nhar_e,
 }
 
 void llsm_frame_phaseshift(llsm_container* dst, FP_TYPE theta) {
-  if(dst -> nmember > LLSM_FRAME_HM) {
-    llsm_hmframe* hm = dst -> members[LLSM_FRAME_HM];
-    if(hm != NULL)
-      llsm_hmframe_phaseshift(hm, theta);
+  llsm_hmframe* hm = llsm_container_get(dst, LLSM_FRAME_HM);
+  if(hm != NULL)
+    llsm_hmframe_phaseshift(hm, theta);
+  llsm_nmframe* nm = llsm_container_get(dst, LLSM_FRAME_NM);
+  if(nm != NULL)
+    for(int i = 0; i < nm -> nchannel; i ++)
+      llsm_hmframe_phaseshift(nm -> eenv[i], theta);
+  FP_TYPE* vs_phse = llsm_container_get(dst, LLSM_FRAME_VSPHSE);
+  if(vs_phse != NULL) {
+    int nhar = llsm_fparray_length(vs_phse);
+    for(int i = 0; i < nhar; i ++)
+      vs_phse[i] = wrap(vs_phse[i] + theta * (i + 1.0));
   }
-  if(dst -> nmember > LLSM_FRAME_NM) {
-    llsm_nmframe* nm = dst -> members[LLSM_FRAME_NM];
-    if(nm != NULL)
-      for(int i = 0; i < nm -> nchannel; i ++)
-        llsm_hmframe_phaseshift(nm -> eenv[i], theta);
+}
+
+void llsm_frame_phasesync_rps(llsm_container* dst, int layer1_based) {
+  llsm_hmframe* hm = llsm_container_get(dst, LLSM_FRAME_HM);
+  FP_TYPE* vs_phse = llsm_container_get(dst, LLSM_FRAME_VSPHSE);
+  FP_TYPE phase_ref = 0;
+  if(layer1_based && vs_phse != NULL && llsm_fparray_length(vs_phse) > 0) {
+    phase_ref = vs_phse[0];
+  } else if(hm != NULL && hm -> nhar > 0) {
+    phase_ref = hm -> phse[0];
   }
+  llsm_frame_phaseshift(dst, -phase_ref);
 }
 
 int llsm_frame_checklayer0(llsm_container* src) {

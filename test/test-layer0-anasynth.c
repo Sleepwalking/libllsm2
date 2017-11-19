@@ -33,8 +33,23 @@ int main() {
 
   verify_data_distribution(x, nx, out -> y, out -> ny);
   verify_spectral_distribution(x, nx, out -> y, out -> ny);
-
   llsm_delete_output(out);
+
+  llsm_chunk_phasesync_rps(chunk, 0);
+  llsm_chunk_phasepropagate(chunk, 1);
+
+  out = llsm_synthesize(opt_s, chunk);
+  wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
+    "test/test-layer0-phasesync-noise.wav");
+  wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
+    "test/test-layer0-phasesync-sin.wav");
+  wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
+    "test/test-layer0-phasesync.wav");
+
+  verify_data_distribution(x, nx, out -> y, out -> ny);
+  verify_spectral_distribution(x, nx, out -> y, out -> ny);
+  llsm_delete_output(out);
+
   llsm_delete_chunk(chunk);
   llsm_delete_aoptions(opt_a);
   llsm_delete_soptions(opt_s);

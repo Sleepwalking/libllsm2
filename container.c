@@ -47,6 +47,10 @@ void     llsm_delete_fparray(FP_TYPE* dst) {
   free((int*)dst - 1);
 }
 
+int      llsm_fparray_length(FP_TYPE* src) {
+  return ((int*)src - 1)[0];
+}
+
 llsm_container* llsm_create_container(int nmember) {
   llsm_container* ret = malloc(sizeof(llsm_container));
   ret -> members = calloc(nmember, sizeof(void*));
@@ -155,17 +159,4 @@ void llsm_delete_chunk(llsm_chunk* dst) {
   llsm_delete_container(dst -> conf);
   free(dst -> frames);
   free(dst);
-}
-
-FP_TYPE* llsm_chunk_getf0(llsm_chunk* src, int* dst_nfrm) {
-  int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);
-  if(nfrm == NULL) return NULL;
-  FP_TYPE* f0 = calloc(*nfrm, sizeof(FP_TYPE));
-  *dst_nfrm = *nfrm;
-  for(int i = 0; i < *nfrm; i ++) {
-    FP_TYPE* if0 = llsm_container_get(src -> frames[i], LLSM_FRAME_F0);
-    if(if0 != NULL)
-      f0[i] = if0[0];
-  }
-  return f0;
 }

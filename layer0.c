@@ -417,3 +417,37 @@ void llsm_delete_output(llsm_output* dst) {
   free(dst -> y_noise);
   free(dst);
 }
+
+FP_TYPE* llsm_chunk_getf0(llsm_chunk* src, int* dst_nfrm) {
+  int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);
+  if(nfrm == NULL) return NULL;
+  FP_TYPE* f0 = calloc(*nfrm, sizeof(FP_TYPE));
+  *dst_nfrm = *nfrm;
+  for(int i = 0; i < *nfrm; i ++) {
+    FP_TYPE* if0 = llsm_container_get(src -> frames[i], LLSM_FRAME_F0);
+    if(if0 != NULL)
+      f0[i] = if0[0];
+  }
+  return f0;
+}
+
+void llsm_chunk_phasesync_rps(llsm_chunk* dst, int layer1_based) {
+  int* nfrm = llsm_container_get(dst -> conf, LLSM_CONF_NFRM);
+  if(nfrm == NULL) return;
+  for(int i = 0; i < *nfrm; i ++)
+    llsm_frame_phasesync_rps(dst -> frames[i], layer1_based);
+}
+
+void llsm_chunk_phasepropagate(llsm_chunk* dst, int sign) {
+  int nfrm = 0;
+  FP_TYPE* f0 = llsm_chunk_getf0(dst, & nfrm);
+  FP_TYPE* thop = llsm_container_get(dst -> conf, LLSM_CONF_THOP);
+  if(thop == NULL || f0 == NULL) return;
+  FP_TYPE* delta_phase = cumsum(f0, nfrm);
+  for(int i = 0; i < nfrm; i ++) {
+    delta_phase[i] *= *thop * sign * 2.0 * M_PI;
+    llsm_frame_phaseshift(dst -> frames[i], delta_phase[i]);
+  }
+  free(delta_phase);
+  free(f0);
+}
