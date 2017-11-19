@@ -74,7 +74,7 @@ void llsm_container_remove(llsm_container* dst, int index);
 #define LLSM_FRAME_NM        2  /**< noise model (llsm_nmframe) */
 #define LLSM_FRAME_RD       10  /**< Rd parameter (FP_TYPE) */
 #define LLSM_FRAME_VTMAGN   11  /**< vocal tract magnitude response
-                                     (FP_TYPE*) */
+                                     (FP_TYPE*, dB) */
 #define LLSM_FRAME_VSPHSE   12  /**< vocal source harmonic phase (FP_TYPE*) */
 /** @} */
 

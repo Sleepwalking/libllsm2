@@ -393,8 +393,10 @@ FP_TYPE* llsm_harmonic_envelope(FP_TYPE* ampl, int nhar, FP_TYPE f0,
   FP_TYPE* X = llsm_harmonic_spectrum(compressed_ampl, nhar, f0, nfft);
   FP_TYPE* full_spectrum = cig_spec2env(X, nfft, f0, nhar, NULL);
   free(X);
-  for(int i = 0; i < nfft / 2 + 1; i ++)
+  for(int i = 0; i < nfft / 2 + 1; i ++) {
     full_spectrum[i] = decompress_logspectrum(full_spectrum[i]) + peak;
+    full_spectrum[i] *= 20.0 / 2.3025851; // log2db
+  }
   free(compressed_ampl);
   return full_spectrum;
 }
