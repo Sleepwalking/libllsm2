@@ -16,7 +16,7 @@ llsm_aoptions* llsm_create_aoptions() {
   ret -> noise_warp = 15000.0;
   ret -> lip_radius = 1.5;
   ret -> f0_refine = 1;
-  ret -> hm_method = LLSM_AOPTION_HMPP;
+  ret -> hm_method = LLSM_AOPTION_HMCZT;
   ret -> rel_winsize = 4.0;
   return ret;
 }
