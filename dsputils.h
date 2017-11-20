@@ -20,6 +20,10 @@ void llsm_harmonic_peakpicking(FP_TYPE* spectrum, FP_TYPE* phase,
   int nfft, FP_TYPE fs, int nhar, FP_TYPE f0,
   FP_TYPE* dst_ampl, FP_TYPE* dst_phse);
 
+/** @brief Analyze one frame of a harmonic signal using Chirp-Z Transform. */
+void llsm_harmonic_czt(FP_TYPE* x, int nx, FP_TYPE f0, FP_TYPE fs, int nhar,
+  FP_TYPE* dst_ampl, FP_TYPE* dst_phse);
+
 /** @brief Estimate the amplitude and phase of harmonics on all voiced
  *    frames; allocate memory and store the results into the designated
  *    pointer arrays. */

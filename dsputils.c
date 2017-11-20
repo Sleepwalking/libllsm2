@@ -1,3 +1,4 @@
+#include "llsm.h"
 #include "dsputils.h"
 #include "external/ciglet/ciglet.h"
 
@@ -113,6 +114,32 @@ void llsm_harmonic_peakpicking(FP_TYPE* spectrum, FP_TYPE* phase,
   }
 }
 
+void llsm_harmonic_czt(FP_TYPE* x, int nx, FP_TYPE f0, FP_TYPE fs,
+  int nhar, FP_TYPE* dst_ampl, FP_TYPE* dst_phse) {
+  FP_TYPE* tmp = calloc(nx * 4, sizeof(FP_TYPE));
+  FP_TYPE* tmp_re = tmp;
+  FP_TYPE* tmp_im = tmp + nx * 2;
+
+  int shift = nx / 2;
+  FP_TYPE* w = blackman(nx);
+  FP_TYPE winsum = sumfp(w, nx);
+
+  for(int i = 0; i < nx; i ++) w[i] *= x[i];
+  czt(w, NULL, tmp_re, tmp_im, 2.0 * M_PI * f0 / fs, nx);
+  for(int i = 0; i < nhar; i ++) {
+    FP_TYPE ishift = shift * 2.0 * M_PI * f0 / fs * (i + 1.0);
+    FP_TYPE s_re = cos(ishift);
+    FP_TYPE s_im = sin(ishift);
+    FP_TYPE dst_re = tmp_re[i + 1] * s_re - tmp_im[i + 1] * s_im;
+    FP_TYPE dst_im = tmp_re[i + 1] * s_im + tmp_im[i + 1] * s_re;
+    dst_ampl[i] = sqrt (dst_re * dst_re + dst_im * dst_im) * 2.0 / winsum;
+    dst_phse[i] = atan2(dst_im, dst_re);
+  }
+
+  free(tmp);
+  free(w);
+}
+
 static int f0_to_nhar(FP_TYPE f0, FP_TYPE fs) {
   return floor(fs / f0 / 2);
 }
@@ -138,27 +165,38 @@ void llsm_harmonic_analysis(FP_TYPE* x, int nx, FP_TYPE fs, FP_TYPE* f0,
     }
   }
 
-  FP_TYPE** spec_magn = malloc2d(nvfrm, nspec, sizeof(FP_TYPE));
-  FP_TYPE** spec_phse = malloc2d(nvfrm, nspec, sizeof(FP_TYPE));
-  llsm_compute_spectrogram(x, nx, center, winsize, nvfrm, nfft, "blackman",
-    spec_magn, spec_phse);
-  // convert from linear to log magnitude while taking care of underflow
-  for(int i = 0; i < nvfrm; i ++)
-    for(int j = 0; j < nspec; j ++)
-      spec_magn[i][j] = log(spec_magn[i][j] + 1e-8);
-
-  for(int i = 0; i < nvfrm; i ++) {
-    int idx = index_vfrm[i];
-    dst_nhar[idx] = min(f0_to_nhar(f0[idx], fs), maxnhar);
-    dst_ampl[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
-    dst_phse[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
-    llsm_harmonic_peakpicking(spec_magn[i], spec_phse[i], nfft, fs,
-      dst_nhar[idx], f0[idx], dst_ampl[idx], dst_phse[idx]);
+  if(method == LLSM_AOPTION_HMPP) {
+    FP_TYPE** spec_magn = malloc2d(nvfrm, nspec, sizeof(FP_TYPE));
+    FP_TYPE** spec_phse = malloc2d(nvfrm, nspec, sizeof(FP_TYPE));
+    llsm_compute_spectrogram(x, nx, center, winsize, nvfrm, nfft, "blackman",
+      spec_magn, spec_phse);
+    for(int i = 0; i < nvfrm; i ++) {
+      // convert from linear to log magnitude while taking care of underflow
+      for(int j = 0; j < nspec; j ++)
+        spec_magn[i][j] = log(spec_magn[i][j] + 1e-8);
+      int idx = index_vfrm[i];
+      dst_nhar[idx] = min(f0_to_nhar(f0[idx], fs), maxnhar);
+      dst_ampl[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
+      dst_phse[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
+      llsm_harmonic_peakpicking(spec_magn[i], spec_phse[i], nfft, fs,
+        dst_nhar[idx], f0[idx], dst_ampl[idx], dst_phse[idx]);
+    }
+    free2d(spec_magn, nvfrm);
+    free2d(spec_phse, nvfrm);
+  } else {
+    for(int i = 0; i < nvfrm; i ++) {
+      int idx = index_vfrm[i];
+      FP_TYPE* xfrm = fetch_frame(x, nx, center[i], winsize[i]);
+      dst_nhar[idx] = min(f0_to_nhar(f0[idx], fs), maxnhar);
+      dst_ampl[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
+      dst_phse[idx] = calloc(dst_nhar[idx], sizeof(FP_TYPE));
+      llsm_harmonic_czt(xfrm, winsize[i], f0[idx], fs, dst_nhar[idx],
+        dst_ampl[idx], dst_phse[idx]);
+      free(xfrm);
+    }
   }
 
   free(index_vfrm); free(winsize); free(center);
-  free2d(spec_magn, nvfrm);
-  free2d(spec_phse, nvfrm);
 }
 
 FP_TYPE* llsm_subband_energy(FP_TYPE* x, int nx, FP_TYPE fmin, FP_TYPE fmax) {
