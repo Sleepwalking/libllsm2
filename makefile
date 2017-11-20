@@ -26,11 +26,13 @@ default: $(TARGET_A)
 
 test: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-dsputils \
+	  $(OUT_DIR)/test-harmonic \
 	  $(OUT_DIR)/test-layer0-anasynth \
 	  $(OUT_DIR)/test-layer0-edgecase \
 	  $(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
+	$(OUT_DIR)/test-harmonic
 	$(OUT_DIR)/test-layer0-anasynth pp
 	$(OUT_DIR)/test-layer0-anasynth czt
 	$(OUT_DIR)/test-layer0-edgecase
@@ -46,9 +48,11 @@ test-layer1: $(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-layer1-anasynth
 
 test-dsputils: $(OUT_DIR)/test-structs \
-	  $(OUT_DIR)/test-dsputils
+	  $(OUT_DIR)/test-dsputils \
+	  $(OUT_DIR)/test-harmonic
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
+	$(OUT_DIR)/test-harmonic
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 	  $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O) test/verify-utils.h

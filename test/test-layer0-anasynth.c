@@ -2,6 +2,13 @@
 #include "../external/libpyin/pyin.h"
 #include "verify-utils.h"
 
+#include <sys/time.h>
+static double get_time() {
+  struct timeval t;
+  gettimeofday(&t, NULL);
+  return (t.tv_sec + (t.tv_usec / 1000000.0)) * 1000.0;
+}
+
 int main(int argc, char** argv) {
   int fs = 0;
   int nbit = 0;
@@ -25,13 +32,16 @@ int main(int argc, char** argv) {
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 
+  double t0 = get_time();
   llsm_output* out = llsm_synthesize(opt_s, chunk);
+  double t1 = get_time();
   wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
     "test/test-layer0-noise.wav");
   wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
     "test/test-layer0-sin.wav");
   wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
     "test/test-layer0.wav");
+  printf("Synthesize speed: %fx real-time.\n", 1000.0 / (t1 - t0));
 
   verify_data_distribution(x, nx, out -> y, out -> ny);
   verify_spectral_distribution(x, nx, out -> y, out -> ny);

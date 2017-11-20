@@ -59,6 +59,10 @@ llsm_container* llsm_aoptions_toconf(llsm_aoptions* src, FP_TYPE fnyq) {
 llsm_soptions* llsm_create_soptions(FP_TYPE fs) {
   llsm_soptions* ret = malloc(sizeof(llsm_soptions));
   ret -> fs = fs;
+  // See test/test-harmonic.c for more information.
+  ret -> use_iczt = 1;
+  ret -> iczt_param_a = 0.275;
+  ret -> iczt_param_b = 2.26;
   return ret;
 }
 
@@ -90,16 +94,31 @@ static void llsm_analyze_harmonics(llsm_aoptions* options, FP_TYPE* x, int nx,
   free2d(tmp_ampl, nfrm); free2d(tmp_phse, nfrm); free(tmp_nhar);
 }
 
-static FP_TYPE* llsm_synthesize_harmonics(llsm_chunk* chunk, FP_TYPE* f0,
-  int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+static FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
+  FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx) {
+  FP_TYPE* ret = NULL;
+  if(options == NULL || (! options -> use_iczt))
+    ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
+  else {
+    if(log_1(nx) * options -> iczt_param_a <
+       log_1(nhar) - options -> iczt_param_b)
+      ret = llsm_synthesize_harmonic_frame_iczt(ampl, phse, nhar, f0, nx);
+    else
+      ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
+  }
+  return ret;
+}
+
+static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
+  llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
   int nwin = round(thop * 2.0 * fs);
   FP_TYPE* w = hanning(nwin);
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue; // skip unvoiced frames
     llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
-    FP_TYPE* yi = llsm_synthesize_harmonic_frame(hm -> ampl, hm -> phse,
-      hm -> nhar, f0[i] / fs, nwin);
+    FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
+      hm -> ampl, hm -> phse, hm -> nhar, f0[i] / fs, nwin);
     for(int j = 0; j < nwin; j ++) {
       yi[j] *= w[j];
       int idx = round((i - 1) * thop * fs + j);
@@ -112,8 +131,9 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_chunk* chunk, FP_TYPE* f0,
   return y;
 }
 
-static FP_TYPE* llsm_synthesize_noise_envelope(llsm_chunk* chunk, int channel,
-  FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+static FP_TYPE* llsm_synthesize_noise_envelope(llsm_soptions* options,
+  llsm_chunk* chunk, int channel, FP_TYPE* f0, int nfrm, FP_TYPE thop,
+  FP_TYPE fs, int ny) {
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
   int nwin = round(thop * 2.0 * fs);
   FP_TYPE* w = hanning(nwin);
@@ -121,8 +141,8 @@ static FP_TYPE* llsm_synthesize_noise_envelope(llsm_chunk* chunk, int channel,
   for(int i = 0; i < nfrm; i ++) {
     llsm_nmframe* nm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_NM);
     llsm_hmframe* hm = f0[i] > 0 ? nm -> eenv[channel] : unvoiced_hm;
-    FP_TYPE* yi = llsm_synthesize_harmonic_frame(hm -> ampl, hm -> phse,
-      hm -> nhar, f0[i] / fs, nwin);
+    FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
+      hm -> ampl, hm -> phse, hm -> nhar, f0[i] / fs, nwin);
     // Make sure the envelope is positive.
     FP_TYPE y_min = minfp(yi, nwin);
     FP_TYPE offset = nm -> edc[channel];
@@ -248,8 +268,8 @@ llsm_chunk* llsm_analyze(llsm_aoptions* options, FP_TYPE* x, int nx,
 
   // harmonic analysis and residual extraction
   llsm_analyze_harmonics(options, x, nx, fs, f0, nfrm, ret);
-  FP_TYPE* x_sin = llsm_synthesize_harmonics(ret, f0, nfrm, options -> thop,
-    fs, nx);
+  FP_TYPE* x_sin = llsm_synthesize_harmonics(NULL, ret, f0, nfrm,
+    options -> thop, fs, nx);
   FP_TYPE* x_res = calloc(nx, sizeof(FP_TYPE));
   for(int i = 0; i < nx; i ++) x_res[i] = x[i] - x_sin[i];
   free(x_sin);
@@ -285,8 +305,8 @@ static int llsm_synthesis_check_integrity(llsm_chunk* src) {
   return 1;
 }
 
-static FP_TYPE* llsm_synthesize_noise_excitation(llsm_chunk* src, FP_TYPE* f0,
-  int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+static FP_TYPE* llsm_synthesize_noise_excitation(llsm_soptions* options,
+  llsm_chunk* src, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
   FP_TYPE* chanfreq = llsm_container_get(src -> conf, LLSM_CONF_CHANFREQ);
   int nchannel = *((int*)llsm_container_get(src -> conf, LLSM_CONF_NCHANNEL));
@@ -296,8 +316,8 @@ static FP_TYPE* llsm_synthesize_noise_excitation(llsm_chunk* src, FP_TYPE* f0,
     if(fmin >= fs / 2.0) break;
     FP_TYPE* x = llsm_generate_bandlimited_noise(ny, fmin / fs * 2.0,
       fmax / fs * 2.0);
-    FP_TYPE* env = llsm_synthesize_noise_envelope(src, c, f0, nfrm, thop,
-      fs, ny);
+    FP_TYPE* env = llsm_synthesize_noise_envelope(options, src, c, f0, nfrm,
+      thop, fs, ny);
     for(int i = 0; i < ny; i ++) {
       x[i] *= sqrt(env[i]);
       y[i] += x[i];
@@ -393,11 +413,12 @@ llsm_output* llsm_synthesize(llsm_soptions* options, llsm_chunk* src) {
   ret -> ny = ny;
   ret -> fs = fs;
 
-  FP_TYPE* y_sin = llsm_synthesize_harmonics(src, f0, nfrm, thop, fs, ny);
+  FP_TYPE* y_sin = llsm_synthesize_harmonics(options, src, f0, nfrm,
+    thop, fs, ny);
   ret -> y_sin = y_sin;
 
-  FP_TYPE* y_exc = llsm_synthesize_noise_excitation(src, f0, nfrm, thop,
-    fs, ny);
+  FP_TYPE* y_exc = llsm_synthesize_noise_excitation(options, src, f0, nfrm,
+    thop, fs, ny);
   FP_TYPE* y_nos = llsm_filter_noise(src, nfrm, thop, fs, y_exc, ny);
   ret -> y_noise = y_nos;
 

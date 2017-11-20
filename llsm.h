@@ -218,7 +218,12 @@ llsm_container* llsm_aoptions_toconf(llsm_aoptions* src, FP_TYPE fnyq);
  *  @{ */
 /** @brief Options for the synthesis routine. */
 typedef struct {
-  FP_TYPE fs;          /**< output sampling rate (Hz) */
+  FP_TYPE fs;           /**< output sampling rate (Hz) */
+  int use_iczt;         /**< automatically switch to ICZT based harmonic
+                             signal generation if it's predicted to be faster
+                             than the recurrent method */
+  FP_TYPE iczt_param_a; /**< the slope parameter for switching on/off ICZT */
+  FP_TYPE iczt_param_b; /**< the offset parameter for switching on/off ICZT */
 } llsm_soptions;
 
 /** @brief Create default synthesis options. */

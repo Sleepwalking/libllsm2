@@ -311,6 +311,21 @@ FP_TYPE* llsm_synthesize_harmonic_frame(FP_TYPE* ampl, FP_TYPE* phse, int nhar,
   return y;
 }
 
+FP_TYPE* llsm_synthesize_harmonic_frame_iczt(FP_TYPE* ampl, FP_TYPE* phse,
+  int nhar, FP_TYPE f0, int nx) {
+  FP_TYPE* yr = malloc(nx * sizeof(FP_TYPE));
+  FP_TYPE* re = calloc(max(nhar + 1, nx) * 2, sizeof(FP_TYPE));
+  FP_TYPE* im = re + max(nhar + 1, nx);
+  FP_TYPE omega0 = 2.0 * M_PI * f0;
+  for(int i = 0; i < nhar; i ++) {
+    re[i + 1] = ampl[i] * cos(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
+    im[i + 1] = ampl[i] * sin(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
+  }
+  iczt(re, im, yr, NULL, omega0, nx);
+  free(re);
+  return yr;
+}
+
 FP_TYPE* llsm_generate_white_noise(int nx) {
   FP_TYPE* ret = calloc(nx, sizeof(FP_TYPE));
   int ntemplate = min(20000, nx);

@@ -61,6 +61,10 @@ int llsm_get_fftsize(FP_TYPE* f0, int nfrm, FP_TYPE fs, FP_TYPE rel_winsize);
 FP_TYPE* llsm_synthesize_harmonic_frame(FP_TYPE* ampl, FP_TYPE* phse, int nhar,
   FP_TYPE f0, int nx);
 
+/** @brief Generate a stationary harmonic signal (ICZT algorithm). */
+FP_TYPE* llsm_synthesize_harmonic_frame_iczt(FP_TYPE* ampl, FP_TYPE* phse,
+  int nhar, FP_TYPE f0, int nx);
+
 /** @brief Generate a Gaussian white noise (mu = 0, sigma = 1) of length nx. */
 FP_TYPE* llsm_generate_white_noise(int nx);
 
