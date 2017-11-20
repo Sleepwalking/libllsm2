@@ -23,20 +23,27 @@ int main() {
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 
+  llsm_output* out0 = llsm_synthesize(opt_s, chunk);
+
   llsm_chunk_tolayer1(chunk, 2048);
   llsm_chunk_tolayer0(chunk);
 
-  llsm_output* out = llsm_synthesize(opt_s, chunk);
-  wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
+  llsm_output* out1 = llsm_synthesize(opt_s, chunk);
+  wavwrite(out1 -> y_noise, out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1-noise.wav");
-  wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
+  wavwrite(out1 -> y_sin  , out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1-sin.wav");
-  wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
+  wavwrite(out1 -> y      , out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1.wav");
 
-  verify_data_distribution(x, nx, out -> y, out -> ny);
-  verify_spectral_distribution(x, nx, out -> y, out -> ny);
-  llsm_delete_output(out);
+  printf("Checking the layer1 reconstruction against the input...\n");
+  verify_data_distribution(x, nx, out1 -> y, out1 -> ny);
+  verify_spectral_distribution(x, nx, out1 -> y, out1 -> ny);
+  printf("Checking the layer1 reconstruction against the layer0 reconstruction"
+    "...\n");
+  verify_spectral_distribution(out0 -> y, out0 -> ny, out1 -> y, out1 -> ny);
+  llsm_delete_output(out0);
+  llsm_delete_output(out1);
 
   // Shift pitch by 1.5x.
   // Alternatively, use llsm_chunk_phasesync_rps.
@@ -56,14 +63,14 @@ int main() {
   llsm_chunk_tolayer0(chunk);
   llsm_chunk_phasepropagate(chunk, 1);
 
-  out = llsm_synthesize(opt_s, chunk);
-  wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
+  out1 = llsm_synthesize(opt_s, chunk);
+  wavwrite(out1 -> y_noise, out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1-pitchshift-noise.wav");
-  wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
+  wavwrite(out1 -> y_sin  , out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1-pitchshift-sin.wav");
-  wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
+  wavwrite(out1 -> y      , out1 -> ny, opt_s -> fs, 24,
     "test/test-layer1-pitchshift.wav");
-  llsm_delete_output(out);
+  llsm_delete_output(out1);
 
   llsm_delete_chunk(chunk);
   llsm_delete_aoptions(opt_a);
