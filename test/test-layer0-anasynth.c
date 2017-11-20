@@ -2,7 +2,7 @@
 #include "../external/libpyin/pyin.h"
 #include "verify-utils.h"
 
-int main() {
+int main(int argc, char** argv) {
   int fs = 0;
   int nbit = 0;
   int nx = 0;
@@ -20,6 +20,8 @@ int main() {
 
   llsm_aoptions* opt_a = llsm_create_aoptions();
   opt_a -> thop = (FP_TYPE)nhop / fs;
+  if(argc > 1 && (! strcmp(argv[1], "czt")))
+    opt_a -> hm_method = LLSM_AOPTION_HMCZT;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 

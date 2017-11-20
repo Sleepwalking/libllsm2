@@ -59,7 +59,7 @@ static inline void test_empirical_kld() {
   FP_TYPE kld4 = empirical_kld(x_samples, nx, y_samples, ny);
   assert(kld4 > kld1);
 
-  printf("KL Divergences: %.3f(~0) %.3f(~%.3f) %.3f(~%.3f) %.3f\n",
+  printf("\tKL Divergences: %.3f(~0) %.3f(~%.3f) %.3f(~%.3f) %.3f\n",
     kld1,
     kld2, log(1.0 / 1.0) + (1.0 + 1.0) / 2.0 - 0.5,
     kld3, log(sqrt(3.0) / 1.0) + (1.0 + 0.0) / 6.0 - 0.5,
@@ -83,7 +83,7 @@ static inline void verify_data_distribution(FP_TYPE* x, int nx,
   dither(y_dithered, x_approx, ny);
 
   FP_TYPE kld = empirical_kld(x_dithered, nx, y_dithered, ny);
-  printf("KL Divergence between the original waveform distribution and its "
+  printf("\tKL Divergence between the original waveform distribution and its "
     "reconstruction: %f\n", kld);
   assert(kld < 0.05);
 
@@ -92,7 +92,7 @@ static inline void verify_data_distribution(FP_TYPE* x, int nx,
   for(int i = 1; i < ny; i ++)
     y_dithered[i] = x_approx[i] - x_approx[i - 1] + randn(0, 1.0) * 1e-4;
   kld = empirical_kld(x_dithered, nx, y_dithered, ny);
-  printf("KL Divergence between the original waveform distribution and its "
+  printf("\tKL Divergence between the original waveform distribution and its "
     "reconstruction (1st derivative): %f\n", kld);
   assert(kld < 0.05);
 
@@ -102,7 +102,7 @@ static inline void verify_data_distribution(FP_TYPE* x, int nx,
     y_dithered[i] = x_approx[i + 1] - 2.0 * x_approx[i] + x_approx[i - 1] +
       randn(0, 1.0) * 1e-4;
   kld = empirical_kld(x_dithered, nx, y_dithered, ny);
-  printf("KL Divergence between the original waveform distribution and its "
+  printf("\tKL Divergence between the original waveform distribution and its "
     "reconstruction (2nd derivative): %f\n", kld);
   assert(kld < 0.05);
 
@@ -139,7 +139,7 @@ static inline void verify_spectral_distribution(FP_TYPE* x, int nx,
     Y_flat[i] = sqrt(Y_flat[i]);
   
   FP_TYPE cc = spectral_correlation(X, Y, min_nfrm, nfft / 2 + 1);
-  printf("Correlation coefficient between the original spectrum "
+  printf("\tCorrelation coefficient between the original spectrum "
     "and its reconstruction: %f\n", cc);
   assert(cc > 0.95);
 
@@ -147,7 +147,7 @@ static inline void verify_spectral_distribution(FP_TYPE* x, int nx,
   dither(Y_flat, Y_flat, y_nfrm * (nfft / 2 + 1));
   FP_TYPE kld = empirical_kld(X_flat, x_nfrm * (nfft / 2 + 1), Y_flat,
     y_nfrm * (nfft / 2 + 1));
-  printf("KL Divergence between the original spectral distribution and its "
+  printf("\tKL Divergence between the original spectral distribution and its "
     "reconstruction: %f\n", kld);
   free(X_flat); free(Y_flat);
   assert(kld < 0.05);
@@ -166,7 +166,7 @@ static inline void verify_spectral_distribution(FP_TYPE* x, int nx,
   dither(Y_flat, Y_flat, (y_nfrm - 1) * (nfft / 2 + 1));
   kld = empirical_kld(X_flat, (x_nfrm - 1) * (nfft / 2 + 1), Y_flat,
     (y_nfrm - 1) * (nfft / 2 + 1));
-  printf("KL Divergence between the original spectral distribution and its "
+  printf("\tKL Divergence between the original spectral distribution and its "
     "reconstruction (1st derivative): %f\n", kld);
   assert(kld < 0.05);
 
