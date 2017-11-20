@@ -82,7 +82,7 @@ static void test_harmonic_analysis(int method) {
   // Check the errors.
   FP_TYPE* ampl_error = calloc(nfrm, sizeof(FP_TYPE));
 
-  for(int i = 0; i < nfrm; i ++)
+  for(int i = 5; i < nfrm - 5; i ++)
     ampl_error[i] = ampl[i][0] - ampl0_truth[i];
   FP_TYPE err_mean = meanfp(ampl_error, nfrm);
   FP_TYPE err_std  = sqrt(varfp(ampl_error, nfrm));
@@ -91,7 +91,7 @@ static void test_harmonic_analysis(int method) {
   printf("Harmonic amplitude analysis error (h0): mean = %.2e std = %.2e\n",
     err_mean, err_std);
 
-  for(int i = 0; i < nfrm; i ++)
+  for(int i = 5; i < nfrm - 5; i ++)
     ampl_error[i] = ampl[i][1] - 0.5;
   err_mean = meanfp(ampl_error, nfrm);
   err_std  = sqrt(varfp(ampl_error, nfrm));
@@ -100,7 +100,7 @@ static void test_harmonic_analysis(int method) {
   printf("Harmonic amplitude analysis error (h1): mean = %.2e std = %.2e\n",
     err_mean, err_std);
 
-  for(int i = 0; i < nfrm; i ++)
+  for(int i = 5; i < nfrm - 5; i ++)
     ampl_error[i] = ampl[i][2] - 0.25;
   err_mean = meanfp(ampl_error, nfrm);
   err_std  = sqrt(varfp(ampl_error, nfrm));
@@ -112,7 +112,7 @@ static void test_harmonic_analysis(int method) {
   free(ampl_error);
   
   FP_TYPE* phase_error = calloc(nfrm - 1, sizeof(FP_TYPE));
-  for(int i = 1; i < nfrm; i ++) {
+  for(int i = 5; i < nfrm - 5; i ++) {
     FP_TYPE phase_inc = f0[i] * 2.0 * 3.1415927 * thop;
     phase_error[i - 1] = phase_diff(phse[i - 1][0] + phase_inc, phse[i][0]);
   }
@@ -169,6 +169,7 @@ int main() {
   test_empirical_kld();
   test_spectral_envelope();
   test_harmonic_analysis(LLSM_AOPTION_HMPP);
+  test_harmonic_analysis(LLSM_AOPTION_HMCZT);
   test_glottal_model();
   return 0;
 }
