@@ -27,6 +27,9 @@ int main(int argc, char** argv) {
 
   llsm_aoptions* opt_a = llsm_create_aoptions();
   opt_a -> thop = (FP_TYPE)nhop / fs;
+  opt_a -> npsd = 128;
+  opt_a -> maxnhar = 400;
+  opt_a -> maxnhar_e = 5;
   if(argc > 1 && (! strcmp(argv[1], "czt")))
     opt_a -> hm_method = LLSM_AOPTION_HMCZT;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
@@ -41,7 +44,8 @@ int main(int argc, char** argv) {
     "test/test-layer0-sin.wav");
   wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
     "test/test-layer0.wav");
-  printf("Synthesize speed: %fx real-time.\n", 1000.0 / (t1 - t0));
+  printf("Synthesize speed: %fx real-time.\n",
+    1000.0 / (t1 - t0) * ((FP_TYPE)out -> ny / opt_s -> fs));
 
   verify_data_distribution(x, nx, out -> y, out -> ny);
   verify_spectral_distribution(x, nx, out -> y, out -> ny);
