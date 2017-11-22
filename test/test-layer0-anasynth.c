@@ -32,20 +32,27 @@ int main(int argc, char** argv) {
   opt_a -> maxnhar_e = 5;
   if(argc > 1 && (! strcmp(argv[1], "czt")))
     opt_a -> hm_method = LLSM_AOPTION_HMCZT;
+  else
+    opt_a -> hm_method = LLSM_AOPTION_HMPP;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
-  llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
-
   double t0 = get_time();
-  llsm_output* out = llsm_synthesize(opt_s, chunk);
+  llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
   double t1 = get_time();
+  printf("Analysis speed: %f ms, %fx real-time.\n", t1 - t0,
+    1000.0 / (t1 - t0) * ((FP_TYPE)nx / fs));
+
+  t0 = get_time();
+  llsm_output* out = llsm_synthesize(opt_s, chunk);
+  t1 = get_time();
+  printf("Synthesis speed: %f ms, %fx real-time.\n", t1 - t0,
+    1000.0 / (t1 - t0) * ((FP_TYPE)out -> ny / opt_s -> fs));
+
   wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24,
     "test/test-layer0-noise.wav");
   wavwrite(out -> y_sin  , out -> ny, opt_s -> fs, 24,
     "test/test-layer0-sin.wav");
   wavwrite(out -> y      , out -> ny, opt_s -> fs, 24,
     "test/test-layer0.wav");
-  printf("Synthesize speed: %fx real-time.\n",
-    1000.0 / (t1 - t0) * ((FP_TYPE)out -> ny / opt_s -> fs));
 
   verify_data_distribution(x, nx, out -> y, out -> ny);
   verify_spectral_distribution(x, nx, out -> y, out -> ny);

@@ -1,0 +1,16 @@
+On Intel Skylake processors (and newer architectures), when compiling libllsm2 against glibc 2.23/2.24, there is a known bug in glibc that slows down llsm_synthesis by 2x, although it doesn't affect the result.
+
+  https://sourceware.org/bugzilla/show_bug.cgi?id=20495
+
+The bug relates to the switching penalty between AVX2 and SSE instructions. In the case of libllsm2, it is triggered by the memset function call (linked to __memset_avx2_erms) from cig_stft_forward during the analysis stage. To fix the bug, YMM registers have to be reset before running REP STOSB.
+
+The bug has been fixed in glibc-2.25. Upgrading to any version later than 2.25 would restore the performance, albeit at the risk of breaking the system. A workaround to this issue is to use LLSM_AOPTION_HMCZT (as opposed to LLSM_AOPTION_HMPP), which doesn't rely on memset, for llsm_harmonic_analysis.
+
+Alternatively - if you still want to use LLSM_AOPTION_HMPP without affecting efficiency, go to sysdeps/x86_64/multiarch/memset-vec-unaligned-erms.S in glibc-2.24 source code; add VZEROUPPER after line 112:
+  111  ...
+  112  L(stosb):
+  113    VZEROUPPER
+  114    movq  %rdx, %rcx
+  115    movzbl  %sil, %eax
+  116  ...
+And recompile & reinstall glibc. If the configuration is correct, this shouldn't break anything.

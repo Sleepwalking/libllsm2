@@ -214,7 +214,7 @@ static void llsm_analyze_noise_envelope(llsm_aoptions* options,
     // Perform harmonic analysis on a squared signal and extract the lower
     //   harmonics is roughly equivalent to modeling the RMS envelope.
     llsm_harmonic_analysis(ce, nx, fs, f0, nfrm, options -> thop,
-      options -> rel_winsize, options -> maxnhar_e, LLSM_AOPTION_HMPP,
+      options -> rel_winsize, options -> maxnhar_e, options -> hm_method,
       tmp_nhar, tmp_ampl, tmp_phse);
     llsm_compute_dc(ce, nx, center, nwin, nfrm, tmp_dc);
     // Store the results.
