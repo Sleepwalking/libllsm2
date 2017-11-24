@@ -5,7 +5,7 @@ AR = ar
 ARFLAGS = -rv
 CFLAGS_DBG = -DFP_TYPE=float -Og -g -std=c99 -Wall -fPIC
 CFLAGS_REL = -DFP_TYPE=float -Ofast -std=c99 -Wall -fPIC
-CFLAGS = CFLAGS_DBG
+CFLAGS = $(CFLAGS_DBG)
 
 OUT_DIR = ./build
 OBJS = $(OUT_DIR)/container.o \
@@ -54,6 +54,8 @@ test-dsputils: $(OUT_DIR)/test-structs \
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-harmonic
+
+$(OUT_DIR)/test-structs: buffer.h
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 	  $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O) test/verify-utils.h

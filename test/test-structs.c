@@ -1,4 +1,5 @@
 #include "../llsm.h"
+#include "../buffer.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -125,10 +126,59 @@ void test_chunk() {
   llsm_delete_aoptions(opt);
 }
 
+void test_buffer() {
+  llsm_ringbuffer* rb1 = llsm_create_ringbuffer(4096);
+  FP_TYPE x[100];
+  FP_TYPE y[200];
+  for(int i = 0; i < 100; i ++)
+    x[i] = (FP_TYPE)rand() / RAND_MAX - 0.5;
+  for(int i = 0; i < 100; i ++) {
+    // The following two realizations of appending 100 samples should
+    //   give equivalent results.
+    if(i % 2 == 0) {
+      llsm_ringbuffer_appendchunk(rb1, 100, x);
+    } else {
+      llsm_ringbuffer_forward(rb1, 100);
+      llsm_ringbuffer_writechunk(rb1, -100, 100, x);
+    }
+    // The following two realizations of appending 100 zeros should
+    //   give equivalent results.
+    if(i % 3 == 0) {
+      llsm_ringbuffer_appendblank(rb1, 100);
+    } else {
+      for(int j = 0; j < 100; j ++)
+        llsm_ringbuffer_append(rb1, 0);
+    }
+    // The following two realizations of reading 200 samples should
+    //   give equivalent results.
+    if(i % 4 == 0) {
+      for(int j = 0; j < 200; j ++)
+        y[j] = llsm_ringbuffer_read(rb1, j - 200);
+    } else {
+      llsm_ringbuffer_readchunk(rb1, -200, 200, y);
+    }
+
+    for(int j = 0; j < 100; j ++)
+      assert(y[j] == x[j]);
+    for(int j = 100; j < 200; j ++)
+      assert(y[j] == 0);
+
+    if(i <= 5) continue;
+
+    llsm_ringbuffer_readchunk(rb1, -1300, 200, y);
+    for(int j = 0; j < 100; j ++)
+      assert(y[j] == 0);
+    for(int j = 100; j < 200; j ++)
+      assert(y[j] == x[j - 100]);
+  }
+  llsm_delete_ringbuffer(rb1);
+}
+
 int main() {
   test_container();
   test_hmframe();
   test_nmframe();
   test_chunk();
+  test_buffer();
   return 0;
 }
