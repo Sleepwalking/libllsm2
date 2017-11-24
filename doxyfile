@@ -1,0 +1,2 @@
+EXTRACT_STATIC=YES
+EXCLUDE_PATTERNS = filter-coef.h
