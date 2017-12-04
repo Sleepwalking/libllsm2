@@ -12,7 +12,8 @@ OBJS = $(OUT_DIR)/container.o \
   $(OUT_DIR)/frame.o \
   $(OUT_DIR)/dsputils.o \
   $(OUT_DIR)/layer0.o \
-  $(OUT_DIR)/layer1.o
+  $(OUT_DIR)/layer1.o \
+  $(OUT_DIR)/llsmrt.o
 TARGET_A = $(OUT_DIR)/libllsm.a
 
 CIGLET_DIR = ./external/ciglet
@@ -30,7 +31,8 @@ test: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-harmonic \
 	  $(OUT_DIR)/test-layer0-anasynth \
 	  $(OUT_DIR)/test-layer0-edgecase \
-	  $(OUT_DIR)/test-layer1-anasynth
+	  $(OUT_DIR)/test-layer1-anasynth \
+	  $(OUT_DIR)/test-llsmrt
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-harmonic
@@ -38,6 +40,7 @@ test: $(OUT_DIR)/test-structs \
 	$(OUT_DIR)/test-layer0-anasynth czt
 	$(OUT_DIR)/test-layer0-edgecase
 	$(OUT_DIR)/test-layer1-anasynth
+	$(OUT_DIR)/test-llsmrt
 
 test-layer0: $(OUT_DIR)/test-layer0-anasynth \
 	  $(OUT_DIR)/test-layer0-edgecase
@@ -55,6 +58,9 @@ test-dsputils: $(OUT_DIR)/test-structs \
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-harmonic
 
+test-llsmrt: $(OUT_DIR)/test-llsmrt
+	$(OUT_DIR)/test-llsmrt
+
 $(OUT_DIR)/test-structs: buffer.h
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
@@ -70,6 +76,7 @@ $(OUT_DIR)/container.o: llsm.h
 $(OUT_DIR)/dsputils.o: dsputils.h llsm.h
 $(OUT_DIR)/layer0.o: dsputils.h llsm.h
 $(OUT_DIR)/layer1.o: dsputils.h llsm.h
+$(OUT_DIR)/llsmrt.o: buffer.h dsputils.h llsm.h llsmrt.h
 
 $(CIGLET_O): $(CIGLET_SRC)
 	mkdir -p $(OUT_DIR)

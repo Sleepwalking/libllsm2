@@ -94,7 +94,7 @@ static void llsm_analyze_harmonics(llsm_aoptions* options, FP_TYPE* x, int nx,
   free2d(tmp_ampl, nfrm); free2d(tmp_phse, nfrm); free(tmp_nhar);
 }
 
-static FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
+FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx) {
   FP_TYPE* ret = NULL;
   if(options == NULL || (! options -> use_iczt))

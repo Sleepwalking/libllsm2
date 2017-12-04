@@ -60,8 +60,8 @@ static inline void llsm_ringbuffer_forward(llsm_ringbuffer* dst, int size) {
   dst -> curr = (dst -> curr + size) % dst -> capacity;
 }
 
-/** @brief Load a contiguous subset of samples into a destination pointer;
- *    the subset starts from a negative index (lag). */
+/** @brief Load a an array of samples into a destination pointer;
+ *    the source starts from a negative index (lag). */
 static inline void llsm_ringbuffer_readchunk(llsm_ringbuffer* src,
   int lag, int size, FP_TYPE* dst) {
   assert(size > 0);
@@ -72,8 +72,8 @@ static inline void llsm_ringbuffer_readchunk(llsm_ringbuffer* src,
     dst[i] = src -> data[(base + lag + i) % src -> capacity];
 }
 
-/** @brief Write a contiguous subset of samples from a source pointer;
- *    the subset starts from a negative index (lag). */
+/** @brief Write an array of samples from a source pointer;
+ *    the destination starts from a negative index (lag). */
 static inline void llsm_ringbuffer_writechunk(llsm_ringbuffer* dst,
   int lag, int size, FP_TYPE* src) {
   assert(size > 0);
@@ -84,8 +84,20 @@ static inline void llsm_ringbuffer_writechunk(llsm_ringbuffer* dst,
     dst -> data[(base + lag + i) % dst -> capacity] = src[i];
 }
 
-/** @brief Append a contiguous subset of samples from a source pointer.
- *    This will move the current position forward by the size of the data. */
+/** @brief Add an array of samples to an subset of current samples from a
+      source pointer; the subset starts from a negative index (lag). */
+static inline void llsm_ringbuffer_addchunk(llsm_ringbuffer* dst,
+  int lag, int size, FP_TYPE* src) {
+  assert(size > 0);
+  assert(lag + size <= 0);
+  assert(lag >= -dst -> capacity);
+  int base = dst -> curr + dst -> capacity;
+  for(int i = 0; i < size; i ++)
+    dst -> data[(base + lag + i) % dst -> capacity] += src[i];
+}
+
+/** @brief Append an array of samples from a source pointer. This will move
+      the current position forward by the size of the data. */
 static inline void llsm_ringbuffer_appendchunk(llsm_ringbuffer* dst,
   int size, FP_TYPE* src) {
   assert(size > 0);
