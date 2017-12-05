@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 
   llsm_rtsynth_buffer* rtbuffer = llsm_create_rtsynth_buffer(opt_s,
-    chunk -> conf, 10, 4096);
+    chunk -> conf, 4096);
   int latency = llsm_rtsynth_buffer_getlatency(rtbuffer);
   FP_TYPE* y = calloc(nx, sizeof(FP_TYPE));
 

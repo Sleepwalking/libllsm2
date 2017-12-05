@@ -13,7 +13,7 @@ typedef void llsm_rtsynth_buffer;
 
 /** @brief Create a real-time synthesis buffer based on LLSM configuraiton. */
 llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
-  llsm_container* conf, int capacity_frames, int capacity_samples);
+  llsm_container* conf, int capacity_samples);
 /** @brief Delete and free a real-time synthesis buffer and all the frames
  *    stored in it. */
 void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dst);

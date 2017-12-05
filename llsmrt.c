@@ -106,7 +106,7 @@ static void llsm_fill_excitation_buffers(llsm_rtsynth_buffer_* dst) {
 }
 
 llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
-  llsm_container* conf, int capacity_frames, int capacity_samples) {
+  llsm_container* conf, int capacity_samples) {
 
   int* nchannel = llsm_container_get(conf, LLSM_CONF_NCHANNEL);
   FP_TYPE* thop = llsm_container_get(conf, LLSM_CONF_THOP);
