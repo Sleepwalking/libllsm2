@@ -311,3 +311,13 @@ int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* ptr, FP_TYPE* dst) {
   } else
     return 0;
 }
+
+int llsm_rtsynth_buffer_getlatency(llsm_rtsynth_buffer* ptr) {
+  llsm_rtsynth_buffer_* src = ptr;
+  return -src -> sin_pos - src -> curr_nhop;
+}
+
+int llsm_rtsynth_buffer_numoutput(llsm_rtsynth_buffer* ptr) {
+  llsm_rtsynth_buffer_* src = ptr;
+  return src -> nout;
+}

@@ -35,6 +35,7 @@ int main(int argc, char** argv) {
 
   llsm_rtsynth_buffer* rtbuffer = llsm_create_rtsynth_buffer(opt_s,
     chunk -> conf, 10, 4096);
+  int latency = llsm_rtsynth_buffer_getlatency(rtbuffer);
   FP_TYPE* y = calloc(nx, sizeof(FP_TYPE));
 
   double t0 = get_time();
@@ -42,18 +43,32 @@ int main(int argc, char** argv) {
   for(int i = 0; i < nfrm; i ++) {
     llsm_rtsynth_buffer_feed(rtbuffer, chunk -> frames[i]);
     while(count < nx) {
-      int status = llsm_rtsynth_buffer_fetch(rtbuffer, y + count);
+      FP_TYPE tmp = 0;
+      int status = llsm_rtsynth_buffer_fetch(rtbuffer, & tmp);
       if(status == 0) break;
+      if(count >= latency) {
+        y[count - latency] = tmp;
+      }
       count ++;
     }
   }
+  llsm_delete_rtsynth_buffer(rtbuffer);
+
   double t1 = get_time();
   wavwrite(y, nx, opt_s -> fs, 24, "test/test-llsmrt.wav");
-
-  printf("Synthesis speed: %f ms, %fx real-time.\n", t1 - t0,
+  printf("Synthesis speed (llsmrt): %f ms, %fx real-time.\n", t1 - t0,
     1000.0 / (t1 - t0) * ((FP_TYPE)nx / opt_s -> fs));
 
-  llsm_delete_rtsynth_buffer(rtbuffer);
+  t0 = get_time();
+  llsm_output* out = llsm_synthesize(opt_s, chunk);
+  t1 = get_time();
+  printf("Synthesis speed (llsm): %f ms, %fx real-time.\n", t1 - t0,
+    1000.0 / (t1 - t0) * ((FP_TYPE)nx / opt_s -> fs));
+
+  verify_data_distribution(out -> y, out -> ny, y, nx - latency);
+  verify_spectral_distribution(out -> y, out -> ny, y, nx - latency);
+
+  llsm_delete_output(out);
   free(y);
 
   llsm_delete_chunk(chunk);

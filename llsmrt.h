@@ -17,6 +17,11 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
 /** @brief Delete and free a real-time synthesis buffer and all the frames
  *    stored in it. */
 void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dst);
+
+/** @brief Get the real-time synthesis latency (in samples). */
+int llsm_rtsynth_buffer_getlatency(llsm_rtsynth_buffer* src);
+/** @brief Get the number of output samples available. */
+int llsm_rtsynth_buffer_numoutput(llsm_rtsynth_buffer* src);
 /** @brief Append a LLSM frame to the real-time synthesis buffer. */
 void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* dst, llsm_container* frame);
 /** @brief Get one sample from the real-time synthesis buffer; returns 1 on
