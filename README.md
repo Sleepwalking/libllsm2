@@ -28,7 +28,7 @@ Using libllsm2 in statistical parameteric speech synthesizers is possible, but y
 
 ### What's new in libllsm2
 
-libllsm2 is a rewrite of libllsm with the following features and changes,
+libllsm2 is a rewrite of [libllsm](https://github.com/Sleepwalking/libllsm) with the following features and changes,
 
 * Clean and well-structured API.
 * Better documentation (with Doxygen) and testing.
