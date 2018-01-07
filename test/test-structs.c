@@ -34,6 +34,15 @@ void test_container() {
   to_fp(c2 -> members[15])[0] = 45.0;
   assert_equal(to_fp(c1 -> members[15])[0], 45.0);
 
+  llsm_container* c3 = llsm_create_container(5);
+  llsm_container_attach(c3, 0, llsm_create_fp(-5.0), free, llsm_copy_fp);
+  llsm_copy_container_inplace(c3, c2);
+  assert_equal(to_fp(c3 -> members[0])[0], 5.0);
+  assert_equal(to_fp(c3 -> members[1])[0], 10.0);
+  assert_equal(to_fp(c3 -> members[15])[0], 45.0);
+  to_fp(c3 -> members[15])[0] = 50.0;
+  assert_equal(to_fp(c1 -> members[15])[0], 50.0);
+
   // test: removal
   llsm_container_remove(c1, 0);
   assert(c1 -> members[0] == NULL);

@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -57,6 +57,8 @@ typedef struct {
 llsm_container* llsm_create_container(int nmember);
 /** @brief Copy-construct a container object from an existing one. */
 llsm_container* llsm_copy_container(llsm_container* src);
+/** @brief In-place version of llsm_copy_container. */
+void llsm_copy_container_inplace(llsm_container* dst, llsm_container* src);
 /** @brief Delete and free a container.
  *
  *  For each member, if a destructor is specified, call the destructor before

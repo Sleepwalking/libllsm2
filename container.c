@@ -92,6 +92,20 @@ llsm_container* llsm_copy_container(llsm_container* src) {
   return ret;
 }
 
+void llsm_copy_container_inplace(llsm_container* dst, llsm_container* src) {
+  for(int i = 0; i < dst -> nmember; i ++)
+    llsm_container_remove(dst, i);
+  for(int i = 0; i < src -> nmember; i ++)
+    if(src -> members[i] != NULL) {
+      if(src -> copyctors[i] == NULL)
+        llsm_container_attach(dst, i, src -> members[i],
+          src -> destructors[i], src -> copyctors[i]);
+      else
+        llsm_container_attach(dst, i, src -> copyctors[i](src -> members[i]),
+          src -> destructors[i], src -> copyctors[i]);
+    }
+}
+
 void llsm_delete_container(llsm_container* dst) {
   if(dst == NULL) return;
   for(int i = 0; i < dst -> nmember; i ++) {
