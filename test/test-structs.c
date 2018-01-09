@@ -50,6 +50,36 @@ void test_container() {
 
   free(c1 -> members[1]);
   free(c2 -> members[1]);
+  free(c3 -> members[1]);
+  llsm_delete_container(c1);
+  llsm_delete_container(c2);
+  llsm_delete_container(c3);
+}
+
+// Use valgrind to check if there's any memory leak.
+void test_container_fparray() {
+  llsm_container* c1 = llsm_create_container(1);
+  llsm_container_attach(c1, 0, llsm_create_fparray(0),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c1, 0, llsm_create_fparray(1),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c1, 1, llsm_create_fparray(1),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c1, 2, llsm_create_fparray(0),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c1, 3, llsm_create_fparray(1),
+    llsm_delete_fparray, llsm_copy_fparray);
+  
+  llsm_container* c2 = llsm_create_container(1);
+  llsm_copy_container_inplace(c2, c1);
+  llsm_container_attach(c2, 0, llsm_create_fparray(1),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c2, 1, llsm_create_fparray(0),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c2, 2, llsm_create_fparray(1),
+    llsm_delete_fparray, llsm_copy_fparray);
+  llsm_container_attach(c2, 3, llsm_create_fparray(0),
+    llsm_delete_fparray, llsm_copy_fparray);
   llsm_delete_container(c1);
   llsm_delete_container(c2);
 }
@@ -185,6 +215,7 @@ void test_buffer() {
 
 int main() {
   test_container();
+  test_container_fparray();
   test_hmframe();
   test_nmframe();
   test_chunk();
