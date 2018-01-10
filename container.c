@@ -146,7 +146,7 @@ void llsm_container_attach_(llsm_container* dst, int index, void* ptr,
 }
 
 void llsm_container_remove(llsm_container* dst, int index) {
-  if(dst -> members[index] == NULL) return;
+  if(index >= dst -> nmember || dst -> members[index] == NULL) return;
 
   if(dst -> destructors[index] != NULL)
     dst -> destructors[index](dst -> members[index]);
