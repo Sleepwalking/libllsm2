@@ -281,23 +281,18 @@ FP_TYPE* llsm_spectral_mean(FP_TYPE* spectrum, int nspec, FP_TYPE fnyq,
     FP_TYPE fnext = i == nfreq - 1 ? freq[i] * 2 - freq[i - 1] : freq[i + 1];
     FP_TYPE fcenter = freq[i];
     int idxl = floor(fprev / fnyq * nspec);
-    int idxc = round(fcenter / fnyq * nspec);
     int idxh = ceil(fnext / fnyq * nspec);
     idxl = max(0, idxl); idxl = min(nspec - 1, idxl);
-    idxc = max(0, idxc); idxc = min(nspec - 1, idxc);
     idxh = max(0, idxh); idxh = min(nspec - 1, idxh);
     if(i > 0 && idxh == idxl)
       env[i] = env[i - 1];
     else {
       // Compute the mean weighted by a triangular spectral filter.
       FP_TYPE acc = 0;
-      for(int j = idxl; j < idxc; j ++) {
-        FP_TYPE coef = 1.0 - (j - idxl) / (idxc - idxl);
-        env[i] += spectrum[j] * coef;
-        acc += coef;
-      }
-      for(int j = idxc; j < idxh; j ++) {
-        FP_TYPE coef = 1.0 - (idxh - j) / (idxh - idxc);
+      FP_TYPE center = (idxh + idxl) / 2.0;
+      FP_TYPE width  = (idxh - idxl + 1.0) / 2.0;
+      for(int j = idxl; j <= idxh; j ++) {
+        FP_TYPE coef = width - fabs(j - center);
         env[i] += spectrum[j] * coef;
         acc += coef;
       }
