@@ -72,15 +72,22 @@ void llsm_refine_f0(FP_TYPE* x, int nx, FP_TYPE fs, FP_TYPE* f0, int nfrm,
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue;
     FP_TYPE favg = 0;
+    int nfavg = 0;
     for(int j = 1; j <= 3; j ++) { // j-th harmonic
       ifdetector* ifd = create_ifdetector(f0[i] / fs * j, f0[i] / fs);
       FP_TYPE* xfrm = fetch_frame(x, nx, round(i * thop * fs), ifd -> nh);
-      FP_TYPE f_j = ifdetector_estimate(ifd, xfrm, ifd -> nh);
-      favg += f_j / j / 3.0;
+      FP_TYPE f_j = ifdetector_estimate(ifd, xfrm, ifd -> nh) / j;
+      if(fabs(f_j - f0[i] / fs) < f0[i] * 0.1 / fs) {
+        favg += f_j;
+        nfavg ++;
+      }
       free(xfrm);
       delete_ifdetector(ifd);
     }
-    f0[i] = favg * fs;
+    if(nfavg > 0) {
+      favg /= nfavg;
+      f0[i] = favg * fs;
+    }
   }
 }
 
