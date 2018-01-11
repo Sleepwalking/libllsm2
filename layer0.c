@@ -163,11 +163,11 @@ static FP_TYPE* llsm_synthesize_noise_envelope(llsm_soptions* options,
     FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
       hm -> ampl, hm -> phse, hm -> nhar, f0[i] / fs, nwin);
     // Make sure the envelope is positive.
-    FP_TYPE y_min = minfp(yi, nwin);
     FP_TYPE offset = nm -> edc[channel];
-    if(y_min < - nm -> edc[channel]) offset = -y_min;
+    for(int j = 0; j < nwin; j ++)
+      yi[j] = max(yi[j] + offset, 1e-8);
     for(int j = 0; j < nwin; j ++) {
-      yi[j] = (yi[j] + offset + 1e-8) * w[j];
+      yi[j] *= w[j];
       int idx = round((i - 1) * thop * fs + j);
       if(idx >= 0 && idx < ny)
         y[idx] += yi[j];
