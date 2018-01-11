@@ -57,7 +57,7 @@ int main() {
     if(vt_magn != NULL) {
       int nspec = llsm_fparray_length(vt_magn);
       for(int j = 0; j < nspec; j ++)
-        vt_magn[j] -= log(1.5);
+        vt_magn[j] -= 20.0 * log10(1.5);
     }
   }
   llsm_chunk_tolayer0(chunk);
