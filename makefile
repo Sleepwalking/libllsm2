@@ -3,8 +3,8 @@ LINK = gcc
 AR = ar
 
 ARFLAGS = -rv
-CFLAGS_DBG = -DFP_TYPE=float -Og -g -std=c99 -Wall -fPIC
-CFLAGS_REL = -DFP_TYPE=float -Ofast -std=c99 -Wall -fPIC
+CFLAGS_DBG = -DFP_TYPE=float -Og -g -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD
+CFLAGS_REL = -DFP_TYPE=float -Ofast -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD
 CFLAGS = $(CFLAGS_DBG)
 
 OUT_DIR = ./build

@@ -1,6 +1,13 @@
+#define _DEFAULT_SOURCE
+
 #include "../llsmrt.h"
 #include "../external/libpyin/pyin.h"
 #include "verify-utils.h"
+
+#ifdef USE_PTHREAD
+#include <pthread.h>
+#include <unistd.h>
+#endif
 
 #include <sys/time.h>
 static double get_time() {
@@ -9,14 +16,55 @@ static double get_time() {
   return (t.tv_sec + (t.tv_usec / 1000000.0)) * 1000.0;
 }
 
+llsm_rtsynth_buffer* rtbuffer = NULL;
+int nfrm = 0;
+int nx = 0;
+int latency = 0;
+llsm_chunk* chunk = NULL;
+FP_TYPE* y = NULL;
+int synth_finish = 0;
+
+#ifdef USE_PTHREAD
+static void* synthesis_thread(void* ptr) {
+  printf("Synthesis thread: starting.\n");
+  for(int i = 0; i < nfrm; i ++) {
+    // llsm_rtsynth_buffer_feed blocks when the buffer is full.
+    llsm_rtsynth_buffer_feed(rtbuffer, chunk -> frames[i]);
+  }
+  printf("Synthesis thread: task completed.\n");
+  synth_finish = 1;
+  return NULL;
+}
+
+static void* reading_thread(void* ptr) {
+  printf("Reading thread: starting.\n");
+  int count = 0;
+  while(count < nx) {
+    FP_TYPE tmp = 0;
+    int status = llsm_rtsynth_buffer_fetch(rtbuffer, & tmp);
+    if(synth_finish) break;
+    if(status == 0) {
+      // llsm_rtsynth_buffer_fetch does not block.
+      // So give it a bit of time waiting for more samples to come.
+      usleep(10);
+      continue;
+    }
+    if(count >= latency) {
+      y[count - latency] = tmp;
+    }
+    count ++;
+  }
+  printf("Reading thread: task completed.\n");
+  return NULL;
+}
+#endif
+
 int main(int argc, char** argv) {
   int fs = 0;
   int nbit = 0;
-  int nx = 0;
   FP_TYPE* x = wavread("test/arctic_a0001.wav", & fs, & nbit, & nx);
 
   int nhop = 128;
-  int nfrm = 0;
   pyin_config param = pyin_init(nhop);
   param.fmin = 50.0;
   param.fmax = 500.0;
@@ -31,14 +79,22 @@ int main(int argc, char** argv) {
   opt_a -> maxnhar = 400;
   opt_a -> maxnhar_e = 5;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
-  llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
+  chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
 
-  llsm_rtsynth_buffer* rtbuffer = llsm_create_rtsynth_buffer(opt_s,
-    chunk -> conf, 4096);
-  int latency = llsm_rtsynth_buffer_getlatency(rtbuffer);
-  FP_TYPE* y = calloc(nx, sizeof(FP_TYPE));
+  rtbuffer = llsm_create_rtsynth_buffer(opt_s, chunk -> conf, 4096);
+  latency = llsm_rtsynth_buffer_getlatency(rtbuffer);
+  y = calloc(nx, sizeof(FP_TYPE));
 
   double t0 = get_time();
+# ifdef USE_PTHREAD
+  printf("Main thread: launching threads.\n");
+  pthread_t threads[2];
+  pthread_create(& threads[0], NULL, & synthesis_thread, NULL);
+  pthread_create(& threads[1], NULL, & reading_thread, NULL);
+  
+  pthread_join(threads[0], NULL);
+  pthread_join(threads[1], NULL);
+# else
   int count = 0;
   for(int i = 0; i < nfrm; i ++) {
     llsm_rtsynth_buffer_feed(rtbuffer, chunk -> frames[i]);
@@ -52,6 +108,7 @@ int main(int argc, char** argv) {
       count ++;
     }
   }
+# endif
   llsm_delete_rtsynth_buffer(rtbuffer);
 
   double t1 = get_time();

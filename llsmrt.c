@@ -17,6 +17,10 @@
   along with libllsm. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifdef USE_PTHREAD
+#include <pthread.h>
+#endif
+
 #include "llsmrt.h"
 #include "buffer.h"
 #include "dsputils.h"
@@ -52,6 +56,11 @@ typedef struct {
   llsm_ringbuffer*  buffer_exc_mix;   // buffer for the sum of noise excitation
   llsm_ringbuffer*  buffer_noise;     // buffer for the filtered noise
   llsm_ringbuffer*  buffer_sin;       // buffer for the sinusoidal component
+
+# ifdef USE_PTHREAD
+  pthread_mutex_t buffer_out_mtx;
+  pthread_cond_t  buffer_out_cv;
+# endif
 } llsm_rtsynth_buffer_;
 
 static FP_TYPE llsm_get_circular_noise(FP_TYPE* x, int nx, int i) {
@@ -160,6 +169,11 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
   for(int i = 0; i < *nchannel; i ++)
     ret -> buffer_mod_comps[i] = llsm_create_ringbuffer(ret -> ninternal);
 
+# ifdef USE_PTHREAD
+  pthread_mutex_init(& ret -> buffer_out_mtx, NULL);
+  pthread_cond_init(& ret -> buffer_out_cv, NULL);
+# endif
+
   // fill in curr_nhop and reset the cycle counter
   ret -> curr_nhop = 1;
   llsm_update_cycle(ret);
@@ -186,6 +200,10 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   free(dst -> win);
   free(dst -> buffer_mod_comps);
   free2d(dst -> exc_template_comps, dst -> nchannel);
+# ifdef USE_PTHREAD
+  pthread_mutex_destroy(& dst -> buffer_out_mtx);
+  pthread_cond_destroy(& dst -> buffer_out_cv);
+# endif
   free(dst);
 }
 
@@ -301,8 +319,17 @@ static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {
     dst -> sin_pos, dst -> curr_nhop, x_sin);
   for(int i = 0; i < dst -> curr_nhop; i ++)
     x_nos[i] += x_sin[i];
+# ifdef USE_PTHREAD
+  pthread_mutex_lock(& dst -> buffer_out_mtx);
+  while(dst -> nout > dst -> buffer_out -> capacity - dst -> curr_nhop)
+    pthread_cond_wait(& dst -> buffer_out_cv, & dst -> buffer_out_mtx);
+# endif
   llsm_ringbuffer_appendchunk(dst -> buffer_out, dst -> curr_nhop, x_nos);
   dst -> nout += dst -> curr_nhop;
+# ifdef USE_PTHREAD
+  pthread_cond_broadcast(& dst -> buffer_out_cv);
+  pthread_mutex_unlock(& dst -> buffer_out_mtx);
+# endif
   free(x_nos);
   free(x_sin);
 }
@@ -323,11 +350,21 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* ptr,
 
 int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* ptr, FP_TYPE* dst) {
   llsm_rtsynth_buffer_* src = ptr;
+# ifdef USE_PTHREAD
+  pthread_mutex_lock(& src -> buffer_out_mtx);
+# endif
   if(src -> nout > 0) {
     *dst = llsm_ringbuffer_read(src -> buffer_out, -src -> nout);
     src -> nout --;
+#   ifdef USE_PTHREAD
+    pthread_mutex_unlock(& src -> buffer_out_mtx);
+    pthread_cond_broadcast(& src -> buffer_out_cv);
+#   endif
     return 1;
   } else
+#   ifdef USE_PTHREAD
+    pthread_mutex_unlock(& src -> buffer_out_mtx);
+#   endif
     return 0;
 }
 
