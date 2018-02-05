@@ -71,7 +71,7 @@ $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 $(TARGET_A): $(OBJS)
 	$(AR) $(ARFLAGS) $(TARGET_A) $(OBJS)
 
-$(OUT_DIR)/frame.o: llsm.h
+$(OUT_DIR)/frame.o: llsm.h dsputils.h
 $(OUT_DIR)/container.o: llsm.h
 $(OUT_DIR)/dsputils.o: dsputils.h llsm.h
 $(OUT_DIR)/layer0.o: dsputils.h llsm.h

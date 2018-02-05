@@ -138,6 +138,8 @@ void llsm_copy_hmframe_inplace(llsm_hmframe* dst, llsm_hmframe* src);
 void llsm_delete_hmframe(llsm_hmframe* dst);
 /** @brief Rotate the phases by (theta * 1-based index of the harmonic). */
 void llsm_hmframe_phaseshift(llsm_hmframe* dst, FP_TYPE theta);
+/** @brief Compute the noise-equivalent harmonic power spectral density. */
+FP_TYPE* llsm_hmframe_harpsd(llsm_hmframe* src, int db_scale);
 /** @} */
 
 /** @defgroup group_nmframe llsm_nmframe
@@ -177,6 +179,10 @@ void llsm_frame_tolayer0(llsm_container* dst, llsm_container* conf);
 void llsm_frame_phaseshift(llsm_container* dst, FP_TYPE theta);
 /** @brief Convert from absolute phase to relative phase shift (RPS). */
 void llsm_frame_phasesync_rps(llsm_container* dst, int layer1_based);
+/** @brief Compute the Signal-to-Noise Ratio from the layer 0 representation;
+      return SNR (dB) or Aperiodicity (linear) on a warped frequency axis. */
+FP_TYPE* llsm_frame_compute_snr(llsm_container* src, llsm_container* conf,
+  int as_aperiodicity);
 /** @brief Verify if the frame contains the information necessary for layer 0
  *    representation. */
 int llsm_frame_checklayer0(llsm_container* src);

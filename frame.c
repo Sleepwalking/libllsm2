@@ -18,6 +18,7 @@
 */
 
 #include "llsm.h"
+#include "dsputils.h"
 #include "external/ciglet/ciglet.h"
 
 llsm_hmframe* llsm_create_hmframe(int nhar) {
@@ -55,6 +56,15 @@ void llsm_delete_hmframe(llsm_hmframe* dst) {
 void llsm_hmframe_phaseshift(llsm_hmframe* dst, FP_TYPE theta) {
   for(int i = 0; i < dst -> nhar; i ++)
     dst -> phse[i] = wrap(dst -> phse[i] + theta * (i + 1.0));
+}
+
+FP_TYPE* llsm_hmframe_harpsd(llsm_hmframe* src, int db_scale) {
+  FP_TYPE* psd = calloc(src -> nhar, sizeof(FP_TYPE));
+  for(int i = 0; i < src -> nhar; i ++) {
+    psd[i] = src -> ampl[i] * src -> ampl[i] * 0.5;
+    if(db_scale) psd[i] = 10.0 * log10(psd[i]);
+  }
+  return psd;
 }
 
 llsm_nmframe* llsm_create_nmframe(int nchannel, int nhar_e, int npsd) {
@@ -166,9 +176,40 @@ void llsm_frame_phasesync_rps(llsm_container* dst, int layer1_based) {
   llsm_frame_phaseshift(dst, -phase_ref);
 }
 
+FP_TYPE* llsm_frame_compute_snr(llsm_container* src, llsm_container* conf,
+  int as_aperiodicity) {
+  FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
+  llsm_hmframe* hm = llsm_container_get(src, LLSM_FRAME_HM);
+  llsm_nmframe* nm = llsm_container_get(src, LLSM_FRAME_NM);
+  FP_TYPE* fnyq = llsm_container_get(conf, LLSM_CONF_FNYQ);
+  FP_TYPE* noswarp = llsm_container_get(conf, LLSM_CONF_NOSWARP);
+  if(f0 == NULL || hm == NULL || nm == NULL) return NULL;
+  if(fnyq == NULL || noswarp == NULL) return NULL;
+  int nfft = max(64, pow(2, ceil(log2(hm -> nhar) + 2)));
+  FP_TYPE* spec_env = llsm_harmonic_envelope(hm -> ampl, hm -> nhar,
+    *f0 / *fnyq / 2.0, nfft);
+  for(int i = 0; i < nfft / 2 + 1; i ++) {
+    spec_env[i] = pow(10.0, spec_env[i] / 20.0); // dB to magnitude
+    spec_env[i] *= spec_env[i] * 0.5; // magnitude to variance
+  }
+  FP_TYPE* warp_axis = llsm_warp_frequency(0, *fnyq, nm -> npsd, *noswarp);
+  FP_TYPE* spec_warp = llsm_spectral_mean(spec_env, nfft / 2 + 1, *fnyq,
+    warp_axis, nm -> npsd);
+  for(int i = 0; i < nm -> npsd; i ++) {
+    if(as_aperiodicity) {
+      FP_TYPE snr = spec_warp[i] / pow(10.0, nm -> psd[i] / 10.0);
+      spec_warp[i] = 1.0 / (1.0 + snr);
+    } else
+      spec_warp[i] = 10.0 * log10(spec_warp[i]) - nm -> psd[i];
+  }
+  free(warp_axis);
+  free(spec_env);
+  return spec_warp;
+}
+
 int llsm_frame_checklayer0(llsm_container* src) {
   FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
-  llsm_nmframe* hm = llsm_container_get(src, LLSM_FRAME_HM);
+  llsm_hmframe* hm = llsm_container_get(src, LLSM_FRAME_HM);
   llsm_nmframe* nm = llsm_container_get(src, LLSM_FRAME_NM);
   if(f0 == NULL || nm == NULL) return 0;
   if(*f0 != 0 && hm == NULL) return 0;
