@@ -46,6 +46,8 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* dst, llsm_container* frame);
 /** @brief Get one sample from the real-time synthesis buffer; returns 1 on
  *    success. */
 int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* src, FP_TYPE* dst);
+/** @brief Reset the real-time synthesis buffer. */
+void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* dst);
 
 /** #} */
 
