@@ -57,6 +57,12 @@ typedef struct {
   llsm_ringbuffer*  buffer_noise;     // buffer for the filtered noise
   llsm_ringbuffer*  buffer_sin;       // buffer for the sinusoidal component
 
+  FP_TYPE* buffer_psd; // size: nspec
+  FP_TYPE* buffer_fft; // size: nfft * 4
+  FP_TYPE* buffer_rawexc; // size: ninternal
+  FP_TYPE* buffer_rawmod; // size: ninternal
+  FP_TYPE* warp_axis;  // size: nspec
+
 # ifdef USE_PTHREAD
   pthread_mutex_t buffer_out_mtx;
   pthread_cond_t  buffer_out_cv;
@@ -103,15 +109,16 @@ static void llsm_update_cycle(llsm_rtsynth_buffer_* dst) {
   dst -> cycle -= (FP_TYPE)dst -> curr_nhop / dst -> fs;
   int nwin = dst -> curr_nhop * 2;
   free(dst -> win);
-  dst -> win = hanning(nwin);
+  dst -> win = hanning_2(nwin);
 }
 
 // Assuming the modulation component buffers all have been loaded with the
 //   next chunk of samples, load noise from the band-wise noise templates
 //   and mix them down to the exc_mix buffer.
 static void llsm_run_excitation_buffers(llsm_rtsynth_buffer_* dst, int nx) {
-  FP_TYPE* x = calloc(nx, sizeof(FP_TYPE)); // noise
-  FP_TYPE* m = malloc(nx * sizeof(FP_TYPE)); // modulation
+  FP_TYPE* x = dst -> buffer_rawexc; // noise
+  FP_TYPE* m = dst -> buffer_rawmod; // modulation
+  memset(x, 0, nx * sizeof(FP_TYPE));
   for(int c = 0; c < dst -> nchannel; c ++) {
     llsm_ringbuffer_readchunk(dst -> buffer_mod_comps[c],
       -dst -> curr_nhop - nx, nx, m);
@@ -121,8 +128,6 @@ static void llsm_run_excitation_buffers(llsm_rtsynth_buffer_* dst, int nx) {
   }
   llsm_ringbuffer_appendchunk(dst -> buffer_exc_mix, nx, x);
   dst -> exc_cycle = (dst -> exc_cycle + nx) % dst -> ntemplate;
-  free(x);
-  free(m);
 }
 
 static void llsm_fill_excitation_buffers(llsm_rtsynth_buffer_* dst) {
@@ -169,6 +174,15 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
   for(int i = 0; i < *nchannel; i ++)
     ret -> buffer_mod_comps[i] = llsm_create_ringbuffer(ret -> ninternal);
 
+  int npsd = *((int*)llsm_container_get(conf, LLSM_CONF_NPSD));
+  FP_TYPE fnyq = *((FP_TYPE*)llsm_container_get(conf, LLSM_CONF_FNYQ));
+  FP_TYPE noswarp = *((FP_TYPE*)llsm_container_get(conf, LLSM_CONF_NOSWARP));
+  ret -> buffer_psd = calloc(ret -> nfft / 2 + 1, sizeof(FP_TYPE));
+  ret -> buffer_fft = calloc(ret -> nfft * 4, sizeof(FP_TYPE));
+  ret -> buffer_rawexc = calloc(ret -> ninternal, sizeof(FP_TYPE));
+  ret -> buffer_rawmod = calloc(ret -> ninternal, sizeof(FP_TYPE));
+  ret -> warp_axis = llsm_warp_frequency(0, fnyq, npsd, noswarp);
+
 # ifdef USE_PTHREAD
   pthread_mutex_init(& ret -> buffer_out_mtx, NULL);
   pthread_cond_init(& ret -> buffer_out_cv, NULL);
@@ -200,6 +214,11 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   free(dst -> win);
   free(dst -> buffer_mod_comps);
   free2d(dst -> exc_template_comps, dst -> nchannel);
+  free(dst -> buffer_psd);
+  free(dst -> buffer_fft);
+  free(dst -> buffer_rawexc);
+  free(dst -> buffer_rawmod);
+  free(dst -> warp_axis);
 # ifdef USE_PTHREAD
   pthread_mutex_destroy(& dst -> buffer_out_mtx);
   pthread_cond_destroy(& dst -> buffer_out_cv);
@@ -258,16 +277,14 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   for(int i = 0; i < nwin; i ++)
     wsqr += dst -> win[i] * dst -> win[i];
 
-  FP_TYPE* psd = calloc(nspec, sizeof(FP_TYPE));
-  FP_TYPE* fftbuffer = calloc(nfft * 4, sizeof(FP_TYPE));
+  FP_TYPE* psd = dst -> buffer_psd;
+  FP_TYPE* fftbuffer = dst -> buffer_fft;
   FP_TYPE* x_re = fftbuffer;
   FP_TYPE* x_im = fftbuffer + nfft;
+  memset(fftbuffer, 0, nfft * 4 * sizeof(FP_TYPE));
 
   int npsd = *((int*)llsm_container_get(dst -> conf, LLSM_CONF_NPSD));
-  FP_TYPE fnyq = *((FP_TYPE*)llsm_container_get(dst -> conf, LLSM_CONF_FNYQ));
-  FP_TYPE noswarp = *((FP_TYPE*)llsm_container_get(dst -> conf,
-    LLSM_CONF_NOSWARP));
-  FP_TYPE* warp_axis = llsm_warp_frequency(0, fnyq, npsd, noswarp);
+  FP_TYPE* warp_axis = dst -> warp_axis;
 
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
@@ -283,7 +300,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, dst -> fs / 2.0,
       warp_axis, npsd);
     for(int i = 0; i < npsd; i ++)
-      env[i] = pow(10.0, nm -> psd[i] / 20.0) / sqrt(env[i] + 1e-8);
+      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3026) / sqrt(env[i] + 1e-8);
 
     // filter
     FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,
@@ -304,10 +321,6 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     llsm_ringbuffer_addchunk(dst -> buffer_noise, -nfft, nfft, x_re);
     free(H); free(env);
   }
-
-  free(psd);
-  free(fftbuffer);
-  free(warp_axis);
 }
 
 static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {

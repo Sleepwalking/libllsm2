@@ -280,23 +280,25 @@ FP_TYPE* llsm_spectral_mean(FP_TYPE* spectrum, int nspec, FP_TYPE fnyq,
     FP_TYPE fprev = i == 0 ? 0 : freq[i - 1];
     FP_TYPE fnext = i == nfreq - 1 ? freq[i] * 2 - freq[i - 1] : freq[i + 1];
     FP_TYPE fcenter = freq[i];
-    int idxl = floor(fprev / fnyq * nspec);
-    int idxh = ceil(fnext / fnyq * nspec);
+    int idxl = fprev / fnyq * nspec;
+    int idxh = fnext / fnyq * nspec + 1;
     idxl = max(0, idxl); idxl = min(nspec - 1, idxl);
     idxh = max(0, idxh); idxh = min(nspec - 1, idxh);
     if(i > 0 && idxh == idxl)
       env[i] = env[i - 1];
     else {
       // Compute the mean weighted by a triangular spectral filter.
-      FP_TYPE acc = 0;
-      FP_TYPE center = (idxh + idxl) / 2.0;
-      FP_TYPE width  = (idxh - idxl + 1.0) / 2.0;
-      for(int j = idxl; j <= idxh; j ++) {
-        FP_TYPE coef = width - fabs(j - center);
-        env[i] += spectrum[j] * coef;
-        acc += coef;
+      int center = (idxh + idxl) / 2.0;
+      center = max(center, 1);
+      center = min(center, nspec - 2);
+      int width = max(1, center - idxl);
+      FP_TYPE acc = (width + 2) * width + 1;
+      env[i] = spectrum[center] * (width + 1) / acc;
+      for(int j = 0; j < width; j ++) {
+        FP_TYPE w = (width - j) / acc;
+        env[i] += spectrum[center + j + 1] * w;
+        env[i] += spectrum[center - j - 1] * w;
       }
-      env[i] /= acc;
     }
   }
   return env;
@@ -339,8 +341,8 @@ FP_TYPE* llsm_synthesize_harmonic_frame_iczt(FP_TYPE* ampl, FP_TYPE* phse,
   FP_TYPE* im = re + max(nhar + 1, nx);
   FP_TYPE omega0 = 2.0 * M_PI * f0;
   for(int i = 0; i < nhar; i ++) {
-    re[i + 1] = ampl[i] * cos(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
-    im[i + 1] = ampl[i] * sin(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
+    re[i + 1] = ampl[i] * cos_2(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
+    im[i + 1] = ampl[i] * sin_2(phse[i] - nx / 2 * (1.0 + i) * omega0) * nx;
   }
   iczt(re, im, yr, NULL, omega0, nx);
   free(re);
