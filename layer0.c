@@ -130,22 +130,30 @@ FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
 
 static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
   llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+  const int maxnhar = 2048;
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
-  int nwin = round(thop * 2.0 * fs);
+  int nwin = round(thop * fs) * 2;
   FP_TYPE* w = hanning(nwin);
+  FP_TYPE* phase = calloc(maxnhar, sizeof(FP_TYPE));
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue; // skip unvoiced frames
     llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
+    int baseidx = i * thop * fs;
+    FP_TYPE phase_shift = (i * thop * fs - baseidx) * 2 * M_PI / fs * f0[i];
+    int nhar = min(maxnhar, hm -> nhar);
+    for(int k = 0; k < nhar; k ++)
+      phase[k] = hm -> phse[k] - phase_shift * (k + 1.0);
     FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
-      hm -> ampl, hm -> phse, hm -> nhar, f0[i] / fs, nwin);
+      hm -> ampl, phase, nhar, f0[i] / fs, nwin);
     for(int j = 0; j < nwin; j ++) {
       yi[j] *= w[j];
-      int idx = round((i - 1) * thop * fs + j);
+      int idx = baseidx + j - nwin / 2;
       if(idx >= 0 && idx < ny)
         y[idx] += yi[j];
     }
     free(yi);
   }
+  free(phase);
   free(w);
   return y;
 }
