@@ -408,8 +408,6 @@ void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* ptr) {
   llsm_rtsynth_buffer_* dst = ptr;
   int capacity_samples = dst -> buffer_out -> capacity;
   dst -> nout = 0;
-  dst -> cycle = 0;
-  dst -> exc_cycle = 0;
   llsm_delete_ringbuffer(dst -> buffer_out);
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
@@ -420,5 +418,7 @@ void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* ptr) {
   dst -> buffer_sin   = llsm_create_ringbuffer(dst -> ninternal);
   dst -> curr_nhop = 1;
   llsm_update_cycle(dst);
+  dst -> cycle = 0;
+  dst -> exc_cycle = 0;
   dst -> sin_pos = -dst -> curr_nhop * 2 - dst -> nfft / 2;
 }
