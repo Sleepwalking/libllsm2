@@ -139,12 +139,9 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     if(f0[i] == 0) continue; // skip unvoiced frames
     llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
     int baseidx = i * thop * fs;
-    FP_TYPE phase_shift = (i * thop * fs - baseidx) * 2 * M_PI / fs * f0[i];
     int nhar = min(maxnhar, hm -> nhar);
-    for(int k = 0; k < nhar; k ++)
-      phase[k] = hm -> phse[k] - phase_shift * (k + 1.0);
     FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
-      hm -> ampl, phase, nhar, f0[i] / fs, nwin);
+      hm -> ampl, hm -> phse, nhar, f0[i] / fs, nwin);
     for(int j = 0; j < nwin; j ++) {
       yi[j] *= w[j];
       int idx = baseidx + j - nwin / 2;
