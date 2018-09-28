@@ -93,6 +93,7 @@ void llsm_container_remove(llsm_container* dst, int index);
 #define LLSM_FRAME_F0        0  /**< fundamental frequency (FP_TYPE) */
 #define LLSM_FRAME_HM        1  /**< harmonic model (llsm_hmframe) */
 #define LLSM_FRAME_NM        2  /**< noise model (llsm_nmframe) */
+#define LLSM_FRAME_PBPSYN    9  /**< use Pulse-by-Pulse synthesis (int) */
 #define LLSM_FRAME_RD       10  /**< Rd parameter (FP_TYPE) */
 #define LLSM_FRAME_VTMAGN   11  /**< vocal tract magnitude response
                                      (FP_TYPE*, dB) */
