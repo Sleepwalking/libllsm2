@@ -80,6 +80,7 @@ llsm_soptions* llsm_create_soptions(FP_TYPE fs) {
   ret -> fs = fs;
   // See test/test-harmonic.c for more information.
   ret -> use_iczt = 1;
+  ret -> use_l1 = 0;
   ret -> iczt_param_a = 0.275;
   ret -> iczt_param_b = 2.26;
   return ret;
@@ -128,13 +129,12 @@ FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   return ret;
 }
 
-static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
+static FP_TYPE* llsm_synthesize_harmonics_l0(llsm_soptions* options,
   llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
   const int maxnhar = 2048;
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
   int nwin = round(thop * fs) * 2;
   FP_TYPE* w = hanning(nwin);
-  FP_TYPE* phase = calloc(maxnhar, sizeof(FP_TYPE));
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue; // skip unvoiced frames
     llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
@@ -150,7 +150,37 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     }
     free(yi);
   }
-  free(phase);
+  free(w);
+  return y;
+}
+
+static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
+  llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+  if(! options -> use_l1) {
+    return llsm_synthesize_harmonics_l0(
+      options, chunk, f0, nfrm, thop, fs, ny);
+  }
+  const int maxnhar = 2048;
+  FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
+  int nwin = round(thop * fs) * 2;
+  FP_TYPE* w = hanning(nwin);
+  for(int i = 0; i < nfrm; i ++) {
+    if(f0[i] == 0) continue; // skip unvoiced frames
+    llsm_frame_tolayer0(chunk -> frames[i], chunk -> conf);
+    llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
+    if(hm == NULL) continue;
+    int baseidx = i * thop * fs;
+    int nhar = min(maxnhar, hm -> nhar);
+    FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
+      hm -> ampl, hm -> phse, nhar, f0[i] / fs, nwin);
+    for(int j = 0; j < nwin; j ++) {
+      yi[j] *= w[j];
+      int idx = baseidx + j - nwin / 2;
+      if(idx >= 0 && idx < ny)
+        y[idx] += yi[j];
+    }
+    free(yi);
+  }
   free(w);
   return y;
 }
@@ -292,7 +322,7 @@ llsm_chunk* llsm_analyze(llsm_aoptions* options, FP_TYPE* x, int nx,
 
   // harmonic analysis and residual extraction
   llsm_analyze_harmonics(options, x, nx, fs, f0, nfrm, ret);
-  FP_TYPE* x_sin = llsm_synthesize_harmonics(NULL, ret, f0, nfrm,
+  FP_TYPE* x_sin = llsm_synthesize_harmonics_l0(NULL, ret, f0, nfrm,
     options -> thop, fs, nx);
   FP_TYPE* x_res = calloc(nx, sizeof(FP_TYPE));
   for(int i = 0; i < nx; i ++) x_res[i] = x[i] - x_sin[i];

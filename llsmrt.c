@@ -259,6 +259,9 @@ static void llsm_rtsynth_buffer_feed_modcomps(llsm_rtsynth_buffer_* dst,
 // Synthesize sinusoidal component.
 static void llsm_rtsynth_buffer_feed_sinusoids(llsm_rtsynth_buffer_* dst,
   llsm_container* frame) {
+  if(dst -> opt.use_l1) {
+    llsm_frame_tolayer0(frame, dst -> conf);
+  }
   FP_TYPE* f0 = llsm_container_get(frame, LLSM_FRAME_F0);
   llsm_hmframe* hm = llsm_container_get(frame, LLSM_FRAME_HM);
   FP_TYPE* phase = dst -> buffer_phase;

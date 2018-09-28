@@ -80,6 +80,8 @@ int main(int argc, char** argv) {
   opt_a -> maxnhar_e = 5;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
+  llsm_chunk_tolayer1(chunk, 2048);
+  opt_s -> use_l1 = 1;
 
   rtbuffer = llsm_create_rtsynth_buffer(opt_s, chunk -> conf, 4096);
   latency = llsm_rtsynth_buffer_getlatency(rtbuffer);

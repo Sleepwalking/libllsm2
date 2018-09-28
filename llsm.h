@@ -249,6 +249,8 @@ typedef struct {
   int use_iczt;         /**< automatically switch to ICZT based harmonic
                              signal generation if it's predicted to be faster
                              than the recurrent method */
+  int use_l1;           /**< directly use L1 parameters for synthesis; does
+                             L1-to-L0 conversion on the fly */
   FP_TYPE iczt_param_a; /**< the slope parameter for switching on/off ICZT */
   FP_TYPE iczt_param_b; /**< the offset parameter for switching on/off ICZT */
 } llsm_soptions;

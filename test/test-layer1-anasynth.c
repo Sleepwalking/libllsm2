@@ -60,7 +60,7 @@ int main() {
         vt_magn[j] -= 20.0 * log10(1.5);
     }
   }
-  llsm_chunk_tolayer0(chunk);
+  opt_s -> use_l1 = 1;
   llsm_chunk_phasepropagate(chunk, 1);
 
   out1 = llsm_synthesize(opt_s, chunk);
