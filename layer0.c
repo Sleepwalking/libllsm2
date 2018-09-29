@@ -230,8 +230,8 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
         pbp_periods = min(pbp_periods, pbp_periods_thrd);
         pbp_periods = max(pbp_periods, 0);
       }
-      pulse_previous = pulse_projected;
     }
+    pulse_previous = pulse_projected;
 
     pbp_switch_rate = 1.0 / min(len_period, thop * fs);
     int require_hm = 0;
