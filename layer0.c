@@ -19,13 +19,8 @@
 
 #include "llsm.h"
 #include "dsputils.h"
+#include "llsmutils.h"
 #include "external/ciglet/ciglet.h"
-
-/** @brief Generate a pulse period from a LF model and filter it by layer 1
- *    parameters, while keeping the phases coherent with the harmonic model. */
-FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
-  FP_TYPE phase_correction, int pre_rotate, int size, FP_TYPE fnyq,
-  FP_TYPE lip_radius, FP_TYPE fs);
 
 llsm_aoptions* llsm_create_aoptions() {
   llsm_aoptions* ret = malloc(sizeof(llsm_aoptions));
@@ -118,21 +113,6 @@ static void llsm_analyze_harmonics(llsm_aoptions* options, FP_TYPE* x, int nx,
   }
 
   free2d(tmp_ampl, nfrm); free2d(tmp_phse, nfrm); free(tmp_nhar);
-}
-
-FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
-  FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx) {
-  FP_TYPE* ret = NULL;
-  if(options == NULL || (! options -> use_iczt))
-    ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
-  else {
-    if(log_1(nx) * options -> iczt_param_a <
-       log_1(nhar) - options -> iczt_param_b)
-      ret = llsm_synthesize_harmonic_frame_iczt(ampl, phse, nhar, f0, nx);
-    else
-      ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
-  }
-  return ret;
 }
 
 static FP_TYPE* llsm_synthesize_harmonics_l0(llsm_soptions* options,

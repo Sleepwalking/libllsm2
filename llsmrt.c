@@ -24,16 +24,8 @@
 #include "llsmrt.h"
 #include "buffer.h"
 #include "dsputils.h"
+#include "llsmutils.h"
 #include "external/ciglet/ciglet.h"
-
-// Implemented in layer0.c
-FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
-  FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx);
-
-// Implemented in layer1.c
-FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
-  FP_TYPE phase_correction, int pre_rotate, int size, FP_TYPE fnyq,
-  FP_TYPE lip_radius, FP_TYPE fs);
 
 typedef struct {
   int nout;      // number of output samples left in buffer_out
