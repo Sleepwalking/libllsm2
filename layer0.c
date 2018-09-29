@@ -207,14 +207,15 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     // the next position where a glottal flow cycle begins
     FP_TYPE pulse_projected = baseidx + p0_dist / 2 / M_PI * len_period;
     // reset the pulse tracker after unvoiced part
-    if(pulse_projected - pulse_previous > len_period * 2)
-      pulse_previous = pulse_projected - len_period * 2;
+    int len_reset = max(len_period, thop * fs) * 2;
+    if(pulse_projected - pulse_previous > len_reset)
+      pulse_previous = pulse_projected - len_reset;
     int num_periods = round((pulse_projected - pulse_previous) / len_period);
+    len_period = (pulse_projected - pulse_previous) / num_periods;
     int pulse_size = pow(2, ceil(log2(max(len_period * 2, nspec))));
     
     // pulse-by-pulse synthesis
-    if(num_periods > 0 && (pbp_on || pbp_periods > 0)) {
-      len_period = (pulse_projected - pulse_previous) / num_periods;
+    if(pbp_on || pbp_periods > 0) {
       for(int j = 0; j < num_periods; j ++) {
         FP_TYPE pulse_current = pulse_previous + j * len_period;
         int     pulse_base = pulse_current;
