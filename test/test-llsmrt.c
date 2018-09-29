@@ -81,7 +81,30 @@ int main(int argc, char** argv) {
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
   llsm_chunk_tolayer1(chunk, 2048);
+  llsm_chunk_phasesync_rps(chunk, 1);
   opt_s -> use_l1 = 1;
+  
+  // Keep switching between pulse-by-pulse and harmonic synthesis modes.
+  for(int i = 0; i < nfrm; i ++) {
+    /*
+    // Enable this to test real-time switching between different synthesis
+    //   modes on different pitches.
+    FP_TYPE* f0_i = llsm_container_get(chunk -> frames[i], LLSM_FRAME_F0);
+    f0_i[0] *= 1.5;
+    // Compensate for the amplitude gain.
+    FP_TYPE* vt_magn = llsm_container_get(chunk -> frames[i],
+      LLSM_FRAME_VTMAGN);
+    if(vt_magn != NULL) {
+      int nspec = llsm_fparray_length(vt_magn);
+      for(int j = 0; j < nspec; j ++)
+        vt_magn[j] -= 20.0 * log10(1.5);
+    }*/
+    if(i % 100 > 50) {
+      llsm_container_attach(chunk -> frames[i], LLSM_FRAME_PBPSYN,
+        llsm_create_int(1), llsm_delete_int, llsm_copy_int);
+    }
+  }
+  llsm_chunk_phasepropagate(chunk, 1);
 
   rtbuffer = llsm_create_rtsynth_buffer(opt_s, chunk -> conf, 4096);
   latency = llsm_rtsynth_buffer_getlatency(rtbuffer);

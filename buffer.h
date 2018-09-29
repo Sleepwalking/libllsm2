@@ -103,8 +103,8 @@ static inline void llsm_ringbuffer_writechunk(llsm_ringbuffer* dst,
     dst -> data[(base + lag + i) % dst -> capacity] = src[i];
 }
 
-/** @brief Add an array of samples to an subset of current samples from a
-      source pointer; the subset starts from a negative index (lag). */
+/** @brief Add an array of samples from a source pointer to an subset of
+ *    current samples; the subset starts from a negative index (lag). */
 static inline void llsm_ringbuffer_addchunk(llsm_ringbuffer* dst,
   int lag, int size, FP_TYPE* src) {
   assert(size > 0);
@@ -135,6 +135,79 @@ static inline void llsm_ringbuffer_appendblank(llsm_ringbuffer* dst, int size) {
   for(int i = 0; i < size; i ++)
     dst -> data[(base - size + i) % dst -> capacity] = 0;
 }
+/** @} */
+
+/** @defgroup group_dualbuffer llsm_dualbuffer
+ *  @{ */
+/** @brief A combination of a backward-looking ringbuffer and a forward-looking
+ *    ringbuffer. It can store both historical samples and future samples being
+ *    worked on up to a certain length. This implementation is designed for
+ *    real-time overlap-and-add operations. */
+typedef struct {
+  FP_TYPE* data_frwd;  /**< forward audio samples */
+  FP_TYPE* data_bkwd;  /**< backward audio samples */
+  int capacity;   /**< the size of the forward and backward buffers */
+  int curr;       /**< the current access/write position */
+} llsm_dualbuffer;
+
+/** @brief Create an empty dual buffer with a given size. */
+static inline llsm_dualbuffer* llsm_create_dualbuffer(int capacity) {
+  assert(capacity > 0);
+  llsm_dualbuffer* ret = (llsm_dualbuffer*)malloc(sizeof(llsm_dualbuffer));
+  ret -> capacity = capacity;
+  ret -> data_frwd = (FP_TYPE*)calloc(capacity, sizeof(FP_TYPE));
+  ret -> data_bkwd = (FP_TYPE*)calloc(capacity, sizeof(FP_TYPE));
+  ret -> curr = 0;
+  return ret;
+}
+
+/** @brief Delete and free a dual buffer. */
+static inline void llsm_delete_dualbuffer(llsm_dualbuffer* dst) {
+  if(dst == NULL) return;
+  free(dst -> data_frwd);
+  free(dst -> data_bkwd);
+  free(dst);
+}
+
+/** @brief Load a an array of samples into a destination pointer. */
+static inline void llsm_dualbuffer_readchunk(llsm_dualbuffer* src,
+  int offset, int size, FP_TYPE* dst) {
+  assert(size > 0);
+  assert(size < src -> capacity);
+  int size_before_zero = offset > 0 ? 0 : -offset;
+  if(size_before_zero > size) size_before_zero = size;
+  int base = src -> curr + src -> capacity;
+  for(int i = 0; i < size_before_zero; i ++)
+    dst[i] = src -> data_bkwd[(base + offset + i) % src -> capacity];
+  for(int i = size_before_zero; i < size; i ++)
+    dst[i] = src -> data_frwd[(base + offset + i) % src -> capacity];
+}
+
+/** @brief Push the current position forward by a few samples. This moves a
+ *     block of samples from the forward buffer to the backward buffer.  */
+static inline void llsm_dualbuffer_forward(llsm_dualbuffer* dst, int size) {
+  for(int i = 0; i < size; i ++) {
+    dst -> data_bkwd[dst -> curr] = dst -> data_frwd[dst -> curr];
+    dst -> data_frwd[dst -> curr] = 0;
+    dst -> curr = (dst -> curr + 1) % dst -> capacity;
+  }
+}
+
+/** @brief Add an array of samples from a source pointer to an subset of
+ *    current samples. */
+static inline void llsm_dualbuffer_addchunk(llsm_dualbuffer* dst,
+  int offset, int size, FP_TYPE* src) {
+  assert(size > 0);
+  assert(size < dst -> capacity);
+  int size_before_zero = offset > 0 ? 0 : -offset;
+  if(size_before_zero > size) size_before_zero = size;
+  int base = dst -> curr + dst -> capacity;
+  for(int i = 0; i < size_before_zero; i ++)
+    dst -> data_bkwd[(base + offset + i) % dst -> capacity] += src[i];
+  for(int i = size_before_zero; i < size; i ++)
+    dst -> data_frwd[(base + offset + i) % dst -> capacity] += src[i];
+}
+
 /** @} */
 
 /** @defgroup group_vringbuffer llsm_vringbuffer
