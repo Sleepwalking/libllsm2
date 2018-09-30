@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -352,25 +352,35 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   }
   
   // Pulse OLA
-  if(dst -> pbp_state || pbp_termination)
-  for(int i = pbp_onset ? -2 : 0; i < num_periods; i ++) {
-    FP_TYPE pulse_current = dst -> pulse + i * len_period;
-    lfmodel pulse_model = source_model;
-    if(pbpeff != NULL) {
-      FP_TYPE delta_t = 0;
-      llsm_gfm g = llsm_lfmodel_to_gfm(pulse_model);
-      pbpeff -> modifier(& g, & delta_t, pbpeff -> info, frame);
-      pulse_model = llsm_gfm_to_lfmodel(g);
-      pulse_current += delta_t * dst -> fs;
+  if(dst -> pbp_state || pbp_termination) {
+    int period_begin = pbp_onset ? -2 : 0;
+    int period_end = num_periods;
+    int num_pulses = period_end - period_begin;
+    int pre_rotate = min(len_period, nhop * 2);
+    if(num_pulses > 0) {
+      FP_TYPE* offsets = calloc(num_pulses, sizeof(FP_TYPE));
+      lfmodel* sources = calloc(num_pulses, sizeof(lfmodel));
+      for(int i = 0; i < num_pulses; i ++) {
+        FP_TYPE delta_t = 0;
+        if(pbpeff != NULL) {
+          llsm_gfm g = llsm_lfmodel_to_gfm(source_model);
+          pbpeff -> modifier(& g, & delta_t, pbpeff -> info, frame);
+          sources[i] = llsm_gfm_to_lfmodel(g);
+        } else
+          sources[i] = source_model;
+        offsets[i] = dst -> pulse + (i + period_begin) * len_period
+                   + delta_t * dst -> fs;
+      }
+      int pulse_base = offsets[0];
+      for(int i = 0; i < num_pulses; i ++) offsets[i] -= pulse_base;
+      FP_TYPE* y = llsm_make_filtered_pulse(frame, sources, offsets,
+        num_pulses, pre_rotate, pulse_size, *fnyq, *liprad, dst -> fs);
+      llsm_dualbuffer_addchunk(dst -> buffer_pulse,
+        pulse_base - pre_rotate - nhop, pulse_size, y);
+      free(y);
+      free(offsets);
+      free(sources);
     }
-    int     pulse_base = pulse_current;
-    int     phase_correction = pulse_base - pulse_current;
-    int     pre_rotate = min(len_period, nhop * 2);
-    FP_TYPE* yi = llsm_make_filtered_pulse(frame, pulse_model,
-      phase_correction, pre_rotate, pulse_size, *fnyq, *liprad, dst -> fs);
-    llsm_dualbuffer_addchunk(dst -> buffer_pulse,
-      pulse_base - pre_rotate - nhop, pulse_size, yi);
-    free(yi);
   }
   if(! dst -> pbp_state) {
     llsm_frame_tolayer0(frame, dst -> conf);

@@ -56,22 +56,14 @@ FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   return ret;
 }
 
-FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
-  FP_TYPE phase_correction, int pre_rotate, int size, FP_TYPE fnyq,
-  FP_TYPE lip_radius, FP_TYPE fs) {
-  FP_TYPE* buffer = calloc(size * 6, sizeof(FP_TYPE));
-  FP_TYPE* lfphseresp = buffer + size * 2;
-  FP_TYPE* real_resp  = buffer + size * 3;
-  FP_TYPE* imag_resp  = buffer + size * 4;
-  FP_TYPE* freq_axis  = buffer + size * 5;
+static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
+  FP_TYPE phase_shift, int size, FP_TYPE fnyq, FP_TYPE lip_radius, FP_TYPE fs,
+  FP_TYPE* vt_harphse, int nhar, FP_TYPE* freq_axis,
+  FP_TYPE* dst_re, FP_TYPE* dst_im) {
   int halfsize = size / 2 + 1;
-  for(int i = 0; i < halfsize; i ++)
-    freq_axis[i] = i * fs / size;
-  
   FP_TYPE* rd = llsm_container_get(src, LLSM_FRAME_RD);
   FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
   FP_TYPE* vsphse = llsm_container_get(src, LLSM_FRAME_VSPHSE);
-  int nhar = llsm_fparray_length(vsphse);
   FP_TYPE* freq_har = calloc(nhar + 1, sizeof(FP_TYPE));
   FP_TYPE* phse_har = calloc(nhar + 1, sizeof(FP_TYPE));
   for(int i = 0; i <= nhar; i ++) freq_har[i] = i * f0[0];
@@ -91,17 +83,9 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   //   vocal tract phase directly from its harmonic representation, albeit
   //   at a cost of slightly breaking minimum phase property (w.r.t the
   //   full-sized spectrum).
-  FP_TYPE* vtmagn = llsm_container_get(src, LLSM_FRAME_VTMAGN);
-  int nspec = llsm_fparray_length(vtmagn);
-  FP_TYPE* vtaxis = linspace(0, fnyq, nspec);
-  FP_TYPE* vtamplhar = interp1(vtaxis, vtmagn, nspec, freq_har + 1, nhar);
+  // add VT phase to the phase delta vector
   for(int i = 0; i < nhar; i ++)
-    vtamplhar[i] = exp(vtamplhar[i] / 20.0 * 2.3025851); // db2mag
-  FP_TYPE* vt_phse = llsm_harmonic_minphase(vtamplhar, nhar);
-  // accumulate VT phase to the phase delta vector
-  for(int i = 0; i < nhar; i ++)
-    phse_har[i + 1] += vt_phse[i];
-  free(vtamplhar); free(vt_phse);
+    phse_har[i + 1] += vt_harphse[i];
   
   // Now the harmonic phase delta will be expanded into a full-sized phase
   //   envelope. Phase interpolation is error-prone but in this context the
@@ -118,6 +102,7 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   //   become glottal flow velocity); then various phase corrections are
   //   applied. The amplitude is normalized by the first glottal harmonic and
   //   appropriately scaled for IFFT.
+  FP_TYPE* lfphseresp = calloc(halfsize, sizeof(FP_TYPE));
   FP_TYPE* lfmagnf0 = lfmodel_spectrum(source_orig, f0, 1, NULL);
   FP_TYPE* lfmagnresp = lfmodel_spectrum(
     source, freq_axis, halfsize, lfphseresp);
@@ -125,14 +110,57 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   lfphseresp[0] = 0;
   for(int i = 1; i < halfsize; i ++) {
     lfmagnresp[i] *= (fnyq / freq_axis[i]) / lfmagnf0[0];
-    lfphseresp[i] += (phase_correction - pre_rotate) * i * 2 * M_PI / size;
+    lfphseresp[i] += phase_shift * i * 2 * M_PI / size;
     lfphseresp[i] += phse_delta[i] - 0.5 * M_PI;
+    dst_re[i]     += lfmagnresp[i] * cos_2(lfphseresp[i]);
+    dst_im[i]     += lfmagnresp[i] * sin_2(lfphseresp[i]);
   }
   free(lfmagnf0);
   free(phse_delta);
   
+  free(freq_har);
+  free(lfmagnresp); free(lfphseresp);
+}
+
+FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
+  FP_TYPE* offsets, int num_pulses, int pre_rotate, int size, FP_TYPE fnyq,
+  FP_TYPE lip_radius, FP_TYPE fs) {
+  FP_TYPE* buffer = calloc(size * 5, sizeof(FP_TYPE));
+  FP_TYPE* freq_axis = buffer + size * 2;
+  FP_TYPE* real_resp = buffer + size * 3;
+  FP_TYPE* imag_resp = buffer + size * 4;
+  int halfsize = size / 2 + 1;
+  for(int i = 0; i < halfsize; i ++)
+    freq_axis[i] = i * fs / size;
+  
+  FP_TYPE* vtmagn = llsm_container_get(src, LLSM_FRAME_VTMAGN);
+  FP_TYPE* vsphse = llsm_container_get(src, LLSM_FRAME_VSPHSE);
+  FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
+  int nspec = llsm_fparray_length(vtmagn);
+  int nhar = llsm_fparray_length(vsphse);
+  
+  FP_TYPE* vtaxis = linspace(0, fnyq, nspec);
+  FP_TYPE* freq_har = calloc(nhar + 1, sizeof(FP_TYPE));
+  for(int i = 0; i <= nhar; i ++) freq_har[i] = i * f0[0];
+  FP_TYPE* vtamplhar = interp1(vtaxis, vtmagn, nspec, freq_har + 1, nhar);
+  for(int i = 0; i < nhar; i ++)
+    vtamplhar[i] = exp(vtamplhar[i] / 20.0 * 2.3025851); // db2mag
+  FP_TYPE* vt_phse = llsm_harmonic_minphase(vtamplhar, nhar);
+  free(freq_har);
+  
+  for(int i = 0; i < num_pulses; i ++) {
+    make_filtered_pulse_spectrum(src, sources[i], -offsets[i] - pre_rotate,
+      size, fnyq, lip_radius, fs, vt_phse, nhar, freq_axis,
+      real_resp, imag_resp);
+  }
+  free(vt_phse);
+  free(vtamplhar);
+  
+  FP_TYPE* magn_resp = abscplx(real_resp, imag_resp, halfsize);
+  FP_TYPE* phse_resp = argcplx(real_resp, imag_resp, halfsize);
+  
   // Apply the lip radiation filter.
-  llsm_lipfilter(lip_radius, fs / size, halfsize, lfmagnresp, lfphseresp, 0);
+  llsm_lipfilter(lip_radius, fs / size, halfsize, magn_resp, phse_resp, 0);
   
   // Apply the vocal tract magnitude filter (whose phase part has already been
   //   addressed). Convert the result into complex form.
@@ -140,12 +168,12 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   for(int i = 0; i < halfsize; i ++)
     vtmagn_scaled[i] *= 2.3025851 / 20.0; // db2log
   for(int i = 0; i < halfsize; i ++) {
-    lfmagnresp[i] *= exp(vtmagn_scaled[i]);
-    real_resp[i] = lfmagnresp[i] * cos_2(lfphseresp[i]);
-    imag_resp[i] = lfmagnresp[i] * sin_2(lfphseresp[i]);
+    magn_resp[i] *= exp_2(vtmagn_scaled[i]);
+    real_resp[i] = magn_resp[i] * cos_2(phse_resp[i]);
+    imag_resp[i] = magn_resp[i] * sin_2(phse_resp[i]);
   }
   free(vtaxis); free(vtmagn_scaled);
-  free(freq_har);
+  free(magn_resp); free(phse_resp);
   
   // Recover the negative part using real-dft symmetry and inverse transform.
   complete_symm (real_resp, size);
@@ -162,7 +190,6 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
     y[i] *= (FP_TYPE)i / fadein;
   for(int i = size - fadeout; i < size; i ++)
     y[i] *= (FP_TYPE)(size - i) / fadeout;
-  free(lfmagnresp);
   free(buffer);
 
   return y;

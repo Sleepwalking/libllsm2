@@ -37,10 +37,11 @@ lfmodel llsm_gfm_to_lfmodel(llsm_gfm src);
 FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx);
 
-/** @brief Generate a pulse period from a LF model and filter it by layer 1
- *    parameters, while keeping the phases coherent with the harmonic model. */
-FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
-  FP_TYPE phase_correction, int pre_rotate, int size, FP_TYPE fnyq,
+/** @brief Generate the sum of a few pulses from a LF model and filter it
+ *    by layer 1 parameters, while keeping the phases coherent with the
+ *    harmonic model. */
+FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
+  FP_TYPE* offsets, int num_pulses, int pre_rotate, int size, FP_TYPE fnyq,
   FP_TYPE lip_radius, FP_TYPE fs);
 
 #endif

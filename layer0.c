@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -203,26 +203,31 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     
     // pulse-by-pulse synthesis
     if(pbp_on || pbp_periods > 0) {
-      for(int j = 0; j < num_periods; j ++) {
-        FP_TYPE pulse_current = pulse_previous + j * len_period;
-        lfmodel pulse_model = source_model;
-        if(pbpeff != NULL) {
+      if(num_periods > 0) {
+        FP_TYPE* offsets = calloc(num_periods, sizeof(FP_TYPE));
+        lfmodel* sources = calloc(num_periods, sizeof(lfmodel));
+        for(int j = 0; j < num_periods; j ++) {
           FP_TYPE delta_t = 0;
-          llsm_gfm g = llsm_lfmodel_to_gfm(pulse_model);
-          pbpeff -> modifier(& g, & delta_t, pbpeff -> info, src_frame);
-          pulse_model = llsm_gfm_to_lfmodel(g);
-          pulse_current += delta_t * fs;
+          if(pbpeff != NULL) {
+            llsm_gfm g = llsm_lfmodel_to_gfm(source_model);
+            pbpeff -> modifier(& g, & delta_t, pbpeff -> info, src_frame);
+            sources[j] = llsm_gfm_to_lfmodel(g);
+          } else
+            sources[j] = source_model;
+          offsets[j] = pulse_previous + j * len_period + delta_t * fs;
         }
-        int     pulse_base = pulse_current;
-        FP_TYPE phase_correction = pulse_base - pulse_current;
-        FP_TYPE* yj = llsm_make_filtered_pulse(src_frame, pulse_model,
-          phase_correction, len_period, pulse_size, *fnyq, *liprad, fs);
+        int pulse_base = offsets[0];
+        for(int j = 0; j < num_periods; j ++) offsets[j] -= pulse_base;
+        FP_TYPE* y = llsm_make_filtered_pulse(src_frame, sources, offsets,
+          num_periods, len_period, pulse_size, *fnyq, *liprad, fs);
         for(int k = 0; k < pulse_size; k ++) {
           int idx = pulse_base + k - len_period;
-          if(idx >= 0 && idx < ny) y_pbp[idx] += yj[k];
+          if(idx >= 0 && idx < ny) y_pbp[idx] += y[k];
         }
-        free(yj);
-        pbp_periods += pbp_on ? 1 : -1;
+        free(y);
+        free(offsets);
+        free(sources);
+        pbp_periods += pbp_on ? num_periods : -num_periods;
         pbp_periods = min(pbp_periods, pbp_periods_thrd);
         pbp_periods = max(pbp_periods, 0);
       }
