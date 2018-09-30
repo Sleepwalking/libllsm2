@@ -79,23 +79,30 @@ static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
     phse_har[i] = wrap(vsphse[i - 1] - phse_har[i] - vsshift * i);
   }
   
-  // Again, to keep PbP synthesis consistent with HM, we need to compute
-  //   vocal tract phase directly from its harmonic representation, albeit
-  //   at a cost of slightly breaking minimum phase property (w.r.t the
-  //   full-sized spectrum).
   // add VT phase to the phase delta vector
   for(int i = 0; i < nhar; i ++)
     phse_har[i + 1] += vt_harphse[i];
   
   // Now the harmonic phase delta will be expanded into a full-sized phase
-  //   envelope. Phase interpolation is error-prone but in this context the
-  //   errors won't matter (too much) thanks to the error-cancelling effect
-  //   of PSOLA.
-  FP_TYPE* phse_har_unwrap = unwrap(phse_har, nhar + 1);
-  FP_TYPE* phse_delta = interp1(freq_har, phse_har_unwrap, nhar + 1,
-    freq_axis, halfsize);
+  //   envelope. Phase interpolation is error-prone but in this context
+  //   systematic errors won't matter thanks to the error-cancelling effect
+  //   of PSOLA. Spurious errors matter though.
+  FP_TYPE* phse_re = calloc(nhar + 1, sizeof(FP_TYPE));
+  FP_TYPE* phse_im = calloc(nhar + 1, sizeof(FP_TYPE));
+  for(int i = 0; i < nhar + 1; i ++) {
+    phse_re[i] = cos_2(phse_har[i]);
+    phse_im[i] = sin_2(phse_har[i]);
+  }
+  FP_TYPE* phse_delta_re = interp1(
+    freq_har, phse_re, nhar + 1, freq_axis, halfsize);
+  FP_TYPE* phse_delta = interp1(
+    freq_har, phse_im, nhar + 1, freq_axis, halfsize);
+  for(int i = 0; i < halfsize; i ++)
+    phse_delta[i] = atan2(phse_delta[i], phse_delta_re[i]);
+  free(freq_har);
   free(phse_har);
-  free(phse_har_unwrap);
+  free(phse_re); free(phse_im);
+  free(phse_delta_re);
   
   // From this point we will move from harmonic reprensentations to full-sized
   //   spectra. A spectrum generated from LF model is first integrated (to
@@ -118,7 +125,6 @@ static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
   free(lfmagnf0);
   free(phse_delta);
   
-  free(freq_har);
   free(lfmagnresp); free(lfphseresp);
 }
 
@@ -139,6 +145,9 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
   int nspec = llsm_fparray_length(vtmagn);
   int nhar = llsm_fparray_length(vsphse);
   
+  // To keep PbP synthesis consistent with HM, we need to compute vocal tract
+  //   phase directly from its harmonic representation, albeit at a cost of
+  //   slightly breaking minimum phase property (w.r.t full-sized spectra).
   FP_TYPE* vtaxis = linspace(0, fnyq, nspec);
   FP_TYPE* freq_har = calloc(nhar + 1, sizeof(FP_TYPE));
   for(int i = 0; i <= nhar; i ++) freq_har[i] = i * f0[0];
@@ -147,6 +156,7 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
     vtamplhar[i] = exp(vtamplhar[i] / 20.0 * 2.3025851); // db2mag
   FP_TYPE* vt_phse = llsm_harmonic_minphase(vtamplhar, nhar);
   free(freq_har);
+  free(vtamplhar);
   
   for(int i = 0; i < num_pulses; i ++) {
     make_filtered_pulse_spectrum(src, sources[i], -offsets[i] - pre_rotate,
@@ -154,7 +164,6 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
       real_resp, imag_resp);
   }
   free(vt_phse);
-  free(vtamplhar);
   
   // Apply the lip radiation filter.
   llsm_lipfilter_reim(lip_radius, fs / size, halfsize,
