@@ -227,6 +227,7 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
   llsm_delete_ringbuffer(dst -> buffer_sin);
+  llsm_delete_dualbuffer(dst -> buffer_pulse);
   for(int i = 0; i < dst -> nchannel; i ++)
     llsm_delete_ringbuffer(dst -> buffer_mod_comps[i]);
   llsm_delete_nmframe(dst -> prev_nm);
