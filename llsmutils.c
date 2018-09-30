@@ -156,24 +156,21 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
   free(vt_phse);
   free(vtamplhar);
   
-  FP_TYPE* magn_resp = abscplx(real_resp, imag_resp, halfsize);
-  FP_TYPE* phse_resp = argcplx(real_resp, imag_resp, halfsize);
-  
   // Apply the lip radiation filter.
-  llsm_lipfilter(lip_radius, fs / size, halfsize, magn_resp, phse_resp, 0);
+  llsm_lipfilter_reim(lip_radius, fs / size, halfsize,
+    real_resp, imag_resp, 0);
   
   // Apply the vocal tract magnitude filter (whose phase part has already been
-  //   addressed). Convert the result into complex form.
+  //   addressed in make_filter_pulse_spectrum).
   FP_TYPE* vtmagn_scaled = interp1(vtaxis, vtmagn, nspec, freq_axis, halfsize);
   for(int i = 0; i < halfsize; i ++)
     vtmagn_scaled[i] *= 2.3025851 / 20.0; // db2log
   for(int i = 0; i < halfsize; i ++) {
-    magn_resp[i] *= exp_2(vtmagn_scaled[i]);
-    real_resp[i] = magn_resp[i] * cos_2(phse_resp[i]);
-    imag_resp[i] = magn_resp[i] * sin_2(phse_resp[i]);
+    FP_TYPE gain = exp_2(vtmagn_scaled[i]);
+    real_resp[i] *= gain;
+    imag_resp[i] *= gain;
   }
   free(vtaxis); free(vtmagn_scaled);
-  free(magn_resp); free(phse_resp);
   
   // Recover the negative part using real-dft symmetry and inverse transform.
   complete_symm (real_resp, size);
