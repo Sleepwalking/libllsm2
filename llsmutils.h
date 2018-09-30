@@ -26,8 +26,14 @@
 #include "llsm.h"
 #include "external/ciglet/ciglet.h"
 
+/** @brief Convert LF model parameters into Fa, Rk, Rg format. */
+llsm_gfm llsm_lfmodel_to_gfm(lfmodel src);
+
+/** @brief Convert Fa, Rk, Rg into LF model parameters. */
+lfmodel llsm_gfm_to_lfmodel(llsm_gfm src);
+
 /** @brief Automatically pick the most efficient method (from sinusoid bank
- *    and CZT) for harmonic synthesis . */
+ *    and CZT) for harmonic synthesis. */
 FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx);
 

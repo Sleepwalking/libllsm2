@@ -306,6 +306,7 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   FP_TYPE* vtmagn = llsm_container_get(frame, LLSM_FRAME_VTMAGN);
   FP_TYPE* rd = llsm_container_get(frame, LLSM_FRAME_RD);
   int* pbpsyn = llsm_container_get(frame, LLSM_FRAME_PBPSYN);
+  llsm_pbpeffect* pbpeff = llsm_container_get(frame, LLSM_FRAME_PBPEFF);
   if(vsphse == NULL || vtmagn == NULL || rd == NULL || *f0 == 0) return;
   int pbp_on = pbpsyn != NULL && pbpsyn[0] == 1;
   int nspec = llsm_fparray_length(vtmagn);
@@ -354,10 +355,18 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   if(dst -> pbp_state || pbp_termination)
   for(int i = pbp_onset ? -2 : 0; i < num_periods; i ++) {
     FP_TYPE pulse_current = dst -> pulse + i * len_period;
+    lfmodel pulse_model = source_model;
+    if(pbpeff != NULL) {
+      FP_TYPE delta_t = 0;
+      llsm_gfm g = llsm_lfmodel_to_gfm(pulse_model);
+      pbpeff -> modifier(& g, & delta_t, pbpeff -> info);
+      pulse_model = llsm_gfm_to_lfmodel(g);
+      pulse_current += delta_t * dst -> fs;
+    }
     int     pulse_base = pulse_current;
     int     phase_correction = pulse_base - pulse_current;
     int     pre_rotate = min(len_period, nhop * 2);
-    FP_TYPE* yi = llsm_make_filtered_pulse(frame, source_model,
+    FP_TYPE* yi = llsm_make_filtered_pulse(frame, pulse_model,
       phase_correction, pre_rotate, pulse_size, *fnyq, *liprad, dst -> fs);
     llsm_dualbuffer_addchunk(dst -> buffer_pulse,
       pulse_base - pre_rotate - nhop, pulse_size, yi);

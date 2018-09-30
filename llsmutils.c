@@ -21,6 +21,26 @@
 #include "dsputils.h"
 #include "llsmutils.h"
 
+llsm_gfm llsm_lfmodel_to_gfm(lfmodel src) {
+  llsm_gfm ret;
+  ret.Fa = 1.0 / src.ta;
+  ret.Rk = (src.te - src.tp) / src.tp;
+  ret.Rg = src.T0 / src.tp / 2.0;
+  ret.T0 = src.T0;
+  ret.Ee = src.Ee;
+  return ret;
+}
+
+lfmodel llsm_gfm_to_lfmodel(llsm_gfm src) {
+  lfmodel ret;
+  ret.ta = 1.0 / src.Fa;
+  ret.tp = src.T0 / src.Rg / 2.0;
+  ret.te = ret.tp + ret.tp * src.Rk;
+  ret.T0 = src.T0;
+  ret.Ee = src.Ee;
+  return ret;
+}
+
 FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
   FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx) {
   FP_TYPE* ret = NULL;
@@ -48,6 +68,7 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   for(int i = 0; i < halfsize; i ++)
     freq_axis[i] = i * fs / size;
   
+  FP_TYPE* rd = llsm_container_get(src, LLSM_FRAME_RD);
   FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
   FP_TYPE* vsphse = llsm_container_get(src, LLSM_FRAME_VSPHSE);
   int nhar = llsm_fparray_length(vsphse);
@@ -58,7 +79,8 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   //   phase for each harmonic. This difference will be freq-interpolated and
   //   added back to the phase spectrum so that the pulse-by-pulse synthesized
   //   speech matches the result from harmonic models.
-  free(lfmodel_spectrum(source, freq_har + 1, nhar, phse_har + 1));
+  lfmodel source_orig = lfmodel_from_rd(*rd, 1.0 / f0[0], 1.0);
+  free(lfmodel_spectrum(source_orig, freq_har + 1, nhar, phse_har + 1));
   FP_TYPE vsshift = vsphse[0] - (phse_har[1] - 0.5 * M_PI);
   for(int i = 1; i <= nhar; i ++) {
     phse_har[i] -= 0.5 * M_PI;
@@ -96,7 +118,7 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel source,
   //   become glottal flow velocity); then various phase corrections are
   //   applied. The amplitude is normalized by the first glottal harmonic and
   //   appropriately scaled for IFFT.
-  FP_TYPE* lfmagnf0 = lfmodel_spectrum(source, f0, 1, NULL);
+  FP_TYPE* lfmagnf0 = lfmodel_spectrum(source_orig, f0, 1, NULL);
   FP_TYPE* lfmagnresp = lfmodel_spectrum(
     source, freq_axis, halfsize, lfphseresp);
   lfmagnresp[0] = 0;

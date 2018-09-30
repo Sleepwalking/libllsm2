@@ -171,6 +171,7 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     FP_TYPE* vtmagn = llsm_container_get(src_frame, LLSM_FRAME_VTMAGN);
     FP_TYPE* rd = llsm_container_get(src_frame, LLSM_FRAME_RD);
     int* pbpsyn = llsm_container_get(src_frame, LLSM_FRAME_PBPSYN);
+    llsm_pbpeffect* pbpeff = llsm_container_get(src_frame, LLSM_FRAME_PBPEFF);
     if(vsphse == NULL || vtmagn == NULL || rd == NULL) continue;
     int pbp_on = pbpsyn != NULL && pbpsyn[0] == 1;
     int nspec = llsm_fparray_length(vtmagn);
@@ -198,9 +199,17 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     if(pbp_on || pbp_periods > 0) {
       for(int j = 0; j < num_periods; j ++) {
         FP_TYPE pulse_current = pulse_previous + j * len_period;
+        lfmodel pulse_model = source_model;
+        if(pbpeff != NULL) {
+          FP_TYPE delta_t = 0;
+          llsm_gfm g = llsm_lfmodel_to_gfm(pulse_model);
+          pbpeff -> modifier(& g, & delta_t, pbpeff -> info);
+          pulse_model = llsm_gfm_to_lfmodel(g);
+          pulse_current += delta_t * fs;
+        }
         int     pulse_base = pulse_current;
         FP_TYPE phase_correction = pulse_base - pulse_current;
-        FP_TYPE* yj = llsm_make_filtered_pulse(src_frame, source_model,
+        FP_TYPE* yj = llsm_make_filtered_pulse(src_frame, pulse_model,
           phase_correction, len_period, pulse_size, *fnyq, *liprad, fs);
         for(int k = 0; k < pulse_size; k ++) {
           int idx = pulse_base + k - len_period;

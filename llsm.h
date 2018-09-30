@@ -93,6 +93,8 @@ void llsm_container_remove(llsm_container* dst, int index);
 #define LLSM_FRAME_F0        0  /**< fundamental frequency (FP_TYPE) */
 #define LLSM_FRAME_HM        1  /**< harmonic model (llsm_hmframe) */
 #define LLSM_FRAME_NM        2  /**< noise model (llsm_nmframe) */
+#define LLSM_FRAME_PBPEFF    8  /**< Pulse-by-Pulse synthesis effect.
+                                     (llsm_pbpeffect) */
 #define LLSM_FRAME_PBPSYN    9  /**< use Pulse-by-Pulse synthesis (int) */
 #define LLSM_FRAME_RD       10  /**< Rd parameter (FP_TYPE) */
 #define LLSM_FRAME_VTMAGN   11  /**< vocal tract magnitude response
@@ -164,6 +166,40 @@ llsm_nmframe* llsm_copy_nmframe(llsm_nmframe* src);
 void llsm_copy_nmframe_inplace(llsm_nmframe* dst, llsm_nmframe* src);
 /** @brief Delete and free a noise model frame. */
 void llsm_delete_nmframe(llsm_nmframe* dst);
+/** @} */
+
+/** @defgroup group_gfm llsm_gfm
+ *  @{ */
+/** @brief Glottal flow model parameters. Internally (layer-1) LLSM uses
+ *    Liljencrants-Fant model. */
+typedef struct {
+  FP_TYPE Fa; /**< return phase frequency (Hz) */
+  FP_TYPE Rk; /**< decay duration relative to rising duration */
+  FP_TYPE Rg; /**< rising duration relative to period length */
+  FP_TYPE T0; /**< period length (seconds) */
+  FP_TYPE Ee; /**< decay slope (normalized to 1) */
+} llsm_gfm;
+
+/** @brief Function pointer for customized glottal flow modification. */
+typedef void (*llsm_fgfm)(llsm_gfm* dst, FP_TYPE* delta_t, void* info);
+
+/** @brief Pulse-by-Pulse synthesis effect. */
+typedef struct {
+  llsm_fgfm modifier;
+  void* info;
+} llsm_pbpeffect;
+
+/** @brief Create a Pulse-by-Pulse synthesis effect object. When modifying
+ *    an array of LLSM frames, an effect object has to be created for each
+ *    of the frames; the objects may share the same modifier and info. */
+llsm_pbpeffect* llsm_create_pbpeffect(llsm_fgfm modifier, void* info);
+
+/** @brief Create a copy of a Pulse-by-Pulse synthesis effect object. */
+llsm_pbpeffect* llsm_copy_pbpeffect(llsm_pbpeffect* src);
+
+/** @brief Delete a Pulse-by-Pulse synthesis effect object. */
+void llsm_delete_pbpeffect(llsm_pbpeffect* dst);
+
 /** @} */
 
 /** @defgroup group_frame LLSM Frame
