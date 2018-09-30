@@ -62,6 +62,9 @@ test-dsputils: $(OUT_DIR)/test-structs \
 test-llsmrt: $(OUT_DIR)/test-llsmrt
 	$(OUT_DIR)/test-llsmrt
 
+test-pbpeffects: $(OUT_DIR)/test-pbpeffects
+	$(OUT_DIR)/test-pbpeffects
+
 $(OUT_DIR)/test-structs: buffer.h
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
