@@ -181,7 +181,8 @@ typedef struct {
 } llsm_gfm;
 
 /** @brief Function pointer for customized glottal flow modification. */
-typedef void (*llsm_fgfm)(llsm_gfm* dst, FP_TYPE* delta_t, void* info);
+typedef void (*llsm_fgfm)(llsm_gfm* dst, FP_TYPE* delta_t, void* info,
+  llsm_container* src_frame);
 
 /** @brief Pulse-by-Pulse synthesis effect. */
 typedef struct {

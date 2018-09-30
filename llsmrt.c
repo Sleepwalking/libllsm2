@@ -359,7 +359,7 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
     if(pbpeff != NULL) {
       FP_TYPE delta_t = 0;
       llsm_gfm g = llsm_lfmodel_to_gfm(pulse_model);
-      pbpeff -> modifier(& g, & delta_t, pbpeff -> info);
+      pbpeff -> modifier(& g, & delta_t, pbpeff -> info, frame);
       pulse_model = llsm_gfm_to_lfmodel(g);
       pulse_current += delta_t * dst -> fs;
     }

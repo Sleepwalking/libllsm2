@@ -59,21 +59,29 @@ static void* reading_thread(void* ptr) {
 }
 #endif
 
+// Pick a number that does not collide with any of the existing indices.
+#define LLSM_FRAME_GROWLSTRENGTH 15
+
 typedef struct {
   int period_count;
   FP_TYPE osc;
 } growl_effect;
 
-static void fgrowl_effect(llsm_gfm* gfm, FP_TYPE* delta_t, void* info_) {
+static void fgrowl_effect(llsm_gfm* gfm, FP_TYPE* delta_t, void* info_,
+  llsm_container* src_frame) {
   growl_effect* info = info_;
-  FP_TYPE lfo = sin(info -> period_count * 2 * M_PI / 50);
+  FP_TYPE* ptr = llsm_container_get(src_frame, LLSM_FRAME_GROWLSTRENGTH);
+  FP_TYPE strength = ptr == NULL ? 1.0 : *ptr;
+  
   info -> period_count ++;
+  FP_TYPE lfo = sin(info -> period_count * 2 * M_PI / 50);
   info -> osc += 2 * M_PI / (6 + lfo);
   FP_TYPE osc = sin(info -> osc);
-  *delta_t = gfm -> T0 * 0.01 * randn(0, 1.0);
-  gfm -> Fa *= 1.0 - osc * 0.5;
-  gfm -> Rk *= 1.0 + osc * 0.3;
-  gfm -> Ee *= 1.0 - osc * 0.5; // reduce the modulation on H1 energy
+  *delta_t = gfm -> T0 * 0.01 * randn(0, 1.0) * strength;
+  gfm -> Fa *= 1.0 - osc * 0.5 * strength;
+  gfm -> Rk *= 1.0 + osc * 0.3 * strength;
+  // reduce the modulation on H1 energy
+  gfm -> Ee *= 1.0 - osc * 0.5 * strength;
 }
 
 int main(int argc, char** argv) {
@@ -103,18 +111,23 @@ int main(int argc, char** argv) {
   opt_s -> use_l1 = 1;
   
   int n_effect_begin = 2.0 / opt_a -> thop;
-  int n_effect_end   = 4.0 / opt_a -> thop;
-  int n_fade = 5;
+  int n_effect_end   = 4.4 / opt_a -> thop;
+  int n_fade = 20;
   growl_effect growl_info = {0, 0};
   for(int i = 0; i < nfrm; i ++) {
     if(i > n_effect_begin && i < n_effect_end) {
+      FP_TYPE* strength = llsm_create_fp(1.0);
       llsm_container_attach(chunk -> frames[i], LLSM_FRAME_PBPSYN,
         llsm_create_int(1), llsm_delete_int, llsm_copy_int);
-    }
-    if(i > n_effect_begin + n_fade && i < n_effect_end - n_fade) {
+      if(i < n_effect_begin + n_fade)
+        *strength = (FP_TYPE)(i - n_effect_begin) / n_fade;
+      if(i > n_effect_end - n_fade)
+        *strength = (FP_TYPE)(n_effect_end - i) / n_fade;
       llsm_container_attach(chunk -> frames[i], LLSM_FRAME_PBPEFF,
         llsm_create_pbpeffect(fgrowl_effect, & growl_info),
         llsm_delete_pbpeffect, llsm_copy_pbpeffect);
+      llsm_container_attach(chunk -> frames[i], LLSM_FRAME_GROWLSTRENGTH,
+        strength, llsm_delete_fp, llsm_copy_fp);
     }
   }
   llsm_chunk_phasepropagate(chunk, 1);
