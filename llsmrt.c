@@ -94,8 +94,8 @@ static void llsm_make_exc_template(llsm_rtsynth_buffer_* dst,
     FP_TYPE fmin = c == 0 ? 0 : chanfreq[c - 1];
     FP_TYPE fmax = c == dst -> nchannel - 1 ? fs / 2.0 : chanfreq[c];
     if(fmin >= fs / 2.0) break;
-    FP_TYPE* x = llsm_generate_bandlimited_noise(dst -> ntemplate,
-      fmin / fs * 2.0, fmax / fs * 2.0);
+    FP_TYPE* x = llsm_generate_bandlimited_noise(
+      dst -> ntemplate, fmin / fs, fmax / fs);
     for(int j = 0; j < dst -> ntemplate; j ++)
       dst -> exc_template_comps[c][j] = llsm_get_circular_noise(x,
         dst -> ntemplate, j);

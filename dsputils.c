@@ -48,9 +48,9 @@ static int get_chebyshev_filter(FP_TYPE cutoff, char* type,
 
 static FP_TYPE* chebyfilt(FP_TYPE* x, int nx, FP_TYPE c1, FP_TYPE c2) {
   c1 = max(0.0, c1);
-  c2 = min(1.0, c2);
-  if(c1 != 0 && c2 != 1.0) {
-    FP_TYPE* x1 = chebyfilt(x , nx, c1, 1.0);
+  c2 = min(0.5, c2);
+  if(c1 != 0 && c2 < 0.5) {
+    FP_TYPE* x1 = chebyfilt(x , nx, c1, 0.5);
     FP_TYPE* y  = chebyfilt(x1, nx, 0.0, c2);
     free(x1);
     return y;

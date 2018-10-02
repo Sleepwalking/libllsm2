@@ -365,7 +365,7 @@ static void llsm_analyze_noise_envelope(llsm_aoptions* options,
     // Trick: extract envelope from the original waveform in high frequencies
     //   where the residual is often smeared due to harmonic analysis errors.
     FP_TYPE* ce = llsm_subband_energy(
-      fmin > 6000.0 ? x : x_res, nx, fmin / fs * 2.0, fmax / fs * 2.0);
+      fmin > 6000.0 ? x : x_res, nx, fmin / fs, fmax / fs);
     // Perform harmonic analysis on a squared signal and extract the lower
     //   harmonics is roughly equivalent to modeling the RMS envelope.
     llsm_harmonic_analysis(ce, nx, fs, f0, nfrm, options -> thop,
@@ -469,8 +469,7 @@ static FP_TYPE* llsm_synthesize_noise_excitation(llsm_soptions* options,
     FP_TYPE fmin = c == 0 ? 0 : chanfreq[c - 1];
     FP_TYPE fmax = c == nchannel - 1 ? fs / 2.0 : chanfreq[c];
     if(fmin >= fs / 2.0) break;
-    FP_TYPE* x = llsm_generate_bandlimited_noise(ny, fmin / fs * 2.0,
-      fmax / fs * 2.0);
+    FP_TYPE* x = llsm_generate_bandlimited_noise(ny, fmin / fs, fmax / fs);
     FP_TYPE* env = llsm_synthesize_noise_envelope(options, src, c, f0, nfrm,
       thop, fs, ny);
     for(int i = 0; i < ny; i ++) {
