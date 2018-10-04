@@ -256,12 +256,9 @@ static void llsm_rtsynth_buffer_feed_modcomps(llsm_rtsynth_buffer_* dst,
     llsm_hmframe* hm = f0 > 0 ? nm -> eenv[c] : unvoiced_hm;
     FP_TYPE* x = llsm_synthesize_harmonic_frame_auto(& dst -> opt,
       hm -> ampl, hm -> phse, hm -> nhar, f0 / dst -> fs, nwin);
-    FP_TYPE x_min = minfp(x, nwin);
     FP_TYPE offset = nm -> edc[c];
-    if(x_min < - nm -> edc[c]) offset = -x_min;
-    for(int i = 0; i < nwin; i ++) {
-      x[i] = (x[i] + offset + 1e-8) * dst -> win[i];
-    }
+    for(int i = 0; i < nwin; i ++)
+      x[i] = (max(x[i] + offset, 1e-8)) * dst -> win[i];
     llsm_ringbuffer_addchunk(dst -> buffer_mod_comps[c], -nwin, nwin, x);
     free(x);
   }
