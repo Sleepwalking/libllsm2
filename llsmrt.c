@@ -475,7 +475,7 @@ static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {
   FP_TYPE* x_nos = calloc(dst -> next_nhop, sizeof(FP_TYPE));
   FP_TYPE* x_sin = calloc(dst -> next_nhop, sizeof(FP_TYPE));
   llsm_ringbuffer_readchunk(dst -> buffer_noise,
-    -dst -> nfft, dst -> next_nhop, x_nos);
+    dst -> sin_pos, dst -> next_nhop, x_nos);
   llsm_ringbuffer_readchunk(dst -> buffer_sin,
     dst -> sin_pos, dst -> next_nhop, x_sin);
   for(int i = 0; i < dst -> next_nhop; i ++)
