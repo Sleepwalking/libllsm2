@@ -23,9 +23,9 @@
 
 llsm_gfm llsm_lfmodel_to_gfm(lfmodel src) {
   llsm_gfm ret;
-  ret.Fa = 1.0 / src.ta;
+  ret.Fa = 1.0 / (src.ta * src.T0);
   ret.Rk = (src.te - src.tp) / src.tp;
-  ret.Rg = src.T0 / src.tp / 2.0;
+  ret.Rg = 0.5 / src.tp;
   ret.T0 = src.T0;
   ret.Ee = src.Ee;
   return ret;
@@ -33,8 +33,8 @@ llsm_gfm llsm_lfmodel_to_gfm(lfmodel src) {
 
 lfmodel llsm_gfm_to_lfmodel(llsm_gfm src) {
   lfmodel ret;
-  ret.ta = 1.0 / src.Fa;
-  ret.tp = src.T0 / src.Rg / 2.0;
+  ret.ta = 1.0 / src.Fa / src.T0;
+  ret.tp = 0.5 / src.Rg;
   ret.te = ret.tp + ret.tp * src.Rk;
   ret.T0 = src.T0;
   ret.Ee = src.Ee;
