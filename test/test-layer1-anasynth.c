@@ -30,6 +30,7 @@ int main() {
   
   // Keep switching between pulse-by-pulse and harmonic synthesis modes.
   for(int i = 0; i < nfrm; i ++) {
+    llsm_container_attach(chunk -> frames[i], LLSM_FRAME_HM, NULL, NULL, NULL);
     if(i % 100 > 50) {
       llsm_container_attach(chunk -> frames[i], LLSM_FRAME_PBPSYN,
         llsm_create_int(1), llsm_delete_int, llsm_copy_int);
@@ -61,6 +62,7 @@ int main() {
   llsm_chunk_phasepropagate(chunk, -1);
   
   for(int i = 0; i < nfrm; i ++) {
+    llsm_container_attach(chunk -> frames[i], LLSM_FRAME_HM, NULL, NULL, NULL);
     FP_TYPE* f0_i = llsm_container_get(chunk -> frames[i], LLSM_FRAME_F0);
     f0_i[0] *= 1.5;
     // Compensate for the amplitude gain.

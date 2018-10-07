@@ -301,13 +301,12 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   int nhop = dst -> curr_nhop;
 
   FP_TYPE* vsphse = llsm_container_get(frame, LLSM_FRAME_VSPHSE);
-  FP_TYPE* vtmagn = llsm_container_get(frame, LLSM_FRAME_VTMAGN);
   FP_TYPE* rd = llsm_container_get(frame, LLSM_FRAME_RD);
   int* pbpsyn = llsm_container_get(frame, LLSM_FRAME_PBPSYN);
   llsm_pbpeffect* pbpeff = llsm_container_get(frame, LLSM_FRAME_PBPEFF);
-  if(vsphse == NULL || vtmagn == NULL || rd == NULL || *f0 == 0) return;
+  if(vsphse == NULL || rd == NULL || *f0 == 0) return;
   int pbp_on = pbpsyn != NULL && pbpsyn[0] == 1;
-  int nspec = llsm_fparray_length(vtmagn);
+  int nspec = *((int*)llsm_container_get(dst -> conf, LLSM_CONF_NSPEC));
 
   // update locations of pulses locked onto the first source harmonic
   FP_TYPE len_period = dst -> fs / f0[0];
@@ -340,7 +339,8 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
     pbp_onset = 1;
     dst -> pbp_state = 1;
     dst -> pbp_offset = -nhop;
-    llsm_frame_tolayer0(frame, dst -> conf);
+    if(llsm_container_get(frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(frame, dst -> conf);
     llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
   }
   if(! pbp_on && dst -> pbp_state) {
@@ -381,7 +381,8 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
     }
   }
   if(! dst -> pbp_state) {
-    llsm_frame_tolayer0(frame, dst -> conf);
+    if(llsm_container_get(frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(frame, dst -> conf);
     llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
   }
   dst -> pulse = pulse_projected;

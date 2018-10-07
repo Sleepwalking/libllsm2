@@ -115,6 +115,7 @@ int main(int argc, char** argv) {
   int n_fade = 20;
   growl_effect growl_info = {0, 0};
   for(int i = 0; i < nfrm; i ++) {
+    llsm_container_attach(chunk -> frames[i], LLSM_FRAME_HM, NULL, NULL, NULL);
     if(i > n_effect_begin && i < n_effect_end) {
       FP_TYPE* strength = llsm_create_fp(1.0);
       llsm_container_attach(chunk -> frames[i], LLSM_FRAME_PBPSYN,

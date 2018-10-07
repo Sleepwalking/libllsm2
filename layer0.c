@@ -262,7 +262,8 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     if(pbp_on && pbp_periods == pbp_periods_thrd && (! require_hm)) continue;
     
     // harmonic model synthesis
-    llsm_frame_tolayer0(src_frame, chunk -> conf);
+    if(llsm_container_get(src_frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(src_frame, chunk -> conf);
     llsm_hmframe* hm = llsm_container_get(src_frame, LLSM_FRAME_HM);
     if(hm == NULL) continue;
     int nhar = min(maxnhar, hm -> nhar);
@@ -455,7 +456,8 @@ static int llsm_synthesis_check_integrity(llsm_chunk* src) {
   if(! llsm_conf_checklayer0(src -> conf)) return 0;
   int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);
   for(int i = 0; i < *nfrm; i ++)
-    if(! llsm_frame_checklayer0(src -> frames[i]))
+    if(! llsm_frame_checklayer0(src -> frames[i]) &&
+       ! llsm_frame_checklayer1(src -> frames[i]))
       return 0;
   return 1;
 }

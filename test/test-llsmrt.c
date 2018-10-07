@@ -86,6 +86,7 @@ int main(int argc, char** argv) {
   
   // Keep switching between pulse-by-pulse and harmonic synthesis modes.
   for(int i = 0; i < nfrm; i ++) {
+    llsm_container_attach(chunk -> frames[i], LLSM_FRAME_HM, NULL, NULL, NULL);
     /*
     // Enable this to test real-time switching between different synthesis
     //   modes on different pitches.
