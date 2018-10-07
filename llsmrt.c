@@ -418,8 +418,7 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
 static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   const int nfade = 16;
   int nfft = dst -> nfft;
-  int lag = nfft / 2;
-  int nspec = lag + 1;
+  int nspec = nfft / 2 + 1;
   int nhop = dst -> curr_nhop;
   int nwin = nhop * 2;
   FP_TYPE wsqr = 0;
@@ -438,7 +437,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
     // STFT
-    llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -lag - nhop,
+    llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -nhop * 2,
       nwin, x_re + nfft / 2 - nhop);
     for(int i = 0; i < nwin; i ++)
       x_re[i - nhop + nfft / 2] *= dst -> win[i];
@@ -467,7 +466,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
       x_re[nfft - i - 1] *= 1.0 - (FP_TYPE)i / nfade;
     }
 
-    llsm_ringbuffer_addchunk(dst -> buffer_noise, -nfft - nhop, nfft, x_re);
+    llsm_ringbuffer_addchunk(dst -> buffer_noise, -nfft, nfft, x_re);
     free(H); free(env);
   }
 }
@@ -476,7 +475,7 @@ static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {
   FP_TYPE* x_nos = calloc(dst -> next_nhop, sizeof(FP_TYPE));
   FP_TYPE* x_sin = calloc(dst -> next_nhop, sizeof(FP_TYPE));
   llsm_ringbuffer_readchunk(dst -> buffer_noise,
-    dst -> sin_pos, dst -> next_nhop, x_nos);
+    -dst -> nfft, dst -> next_nhop, x_nos);
   llsm_ringbuffer_readchunk(dst -> buffer_sin,
     dst -> sin_pos, dst -> next_nhop, x_sin);
   for(int i = 0; i < dst -> next_nhop; i ++)
