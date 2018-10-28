@@ -448,7 +448,8 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, dst -> fs / 2.0,
       warp_axis, npsd);
     for(int i = 0; i < npsd; i ++)
-      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3026) / sqrt(env[i] + 1e-8);
+      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3025851)
+             / sqrt(env[i] * 44100 / dst -> fs + 1e-8);
 
     // filter
     FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,

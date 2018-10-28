@@ -336,7 +336,7 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x_res,
       warp_axis, options -> npsd);
     // The PSD is squared and hence 10 * log10(.)
     for(int j = 0; j < options -> npsd; j ++)
-      dst_nm -> psd[j] = 10.0 * log10(wpsd[j]);
+      dst_nm -> psd[j] = 10.0 * log10(wpsd[j] * 44100 / fs);
     free(xfrm); free(wpsd);
   }
   free(warp_axis);
@@ -524,7 +524,8 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     llsm_fft_to_psd(x_re, x_im, nfft, wsqr, psd);
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, fs / 2.0, warp_axis, npsd);
     for(int j = 0; j < npsd; j ++)
-      env[j] = pow(10.0, nm -> psd[j] / 20.0) / sqrt(env[j] + 1e-8);
+      env[j] = exp(nm -> psd[j] / 20.0 * 2.3025851)
+             / sqrt(env[j] * 44100 / fs + 1e-8);
 
     // filter
     FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,
