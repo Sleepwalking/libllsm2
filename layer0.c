@@ -335,8 +335,9 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x_res,
     FP_TYPE* wpsd = llsm_spectral_mean(frame_psd, nspec - 1, fs / 2.0,
       warp_axis, options -> npsd);
     // The PSD is squared and hence 10 * log10(.)
+    // -120 dB noise floor for underflow protection.
     for(int j = 0; j < options -> npsd; j ++)
-      dst_nm -> psd[j] = 10.0 * log10(wpsd[j] * 44100 / fs);
+      dst_nm -> psd[j] = 10.0 * log10(wpsd[j] * 44100 / fs + 1e-12);
     free(xfrm); free(wpsd);
   }
   free(warp_axis);
