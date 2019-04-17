@@ -13,6 +13,7 @@ OBJS = $(OUT_DIR)/container.o \
   $(OUT_DIR)/dsputils.o \
   $(OUT_DIR)/layer0.o \
   $(OUT_DIR)/layer1.o \
+  $(OUT_DIR)/coder.o \
   $(OUT_DIR)/llsmrt.o
 TARGET_A = $(OUT_DIR)/libllsm.a
 
@@ -76,6 +77,7 @@ $(OUT_DIR)/container.o: llsm.h
 $(OUT_DIR)/dsputils.o: dsputils.h llsm.h
 $(OUT_DIR)/layer0.o: dsputils.h llsm.h
 $(OUT_DIR)/layer1.o: dsputils.h llsm.h
+$(OUT_DIR)/coder.o: dsputils.h llsm.h
 $(OUT_DIR)/llsmrt.o: buffer.h dsputils.h llsm.h llsmrt.h
 
 $(CIGLET_O): $(CIGLET_SRC)

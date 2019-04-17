@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -292,6 +292,30 @@ llsm_chunk* llsm_analyze(llsm_aoptions* options, FP_TYPE* x, int nx,
   FP_TYPE fs, FP_TYPE* f0, int nfrm, FP_TYPE** x_ap);
 /** @brief Generate speech from a LLSM parameter chunk. */
 llsm_output* llsm_synthesize(llsm_soptions* options, llsm_chunk* src);
+/** @} */
+
+/** @defgroup group_coder LLSM Coder
+ *  @{ */
+/** @brief Temporary data for (lossy) encoding and decoding of LLSM frames.
+      The implementation is not visible to users. */
+typedef void llsm_coder;
+
+/** @brief Create a coder for a certain model configuration. The coder can be
+      used for both encoding and decoding. The dimensionality of encoded
+      frames is order_spec + order_bap + 3. */
+llsm_coder* llsm_create_coder(llsm_container* conf, int order_spec,
+  int order_bap);
+/** @brief Delete and free an LLSM coder. */
+void llsm_delete_coder(llsm_coder* dst);
+/** @brief Convert an LLSM frame into a fixed-dimensional vector. */
+FP_TYPE* llsm_coder_encode(llsm_coder* c, llsm_container* src);
+/** @brief Reconstruct an LLSM frame (layer 1 representation) from a
+      fixed-dimensional vector. */
+llsm_container* llsm_coder_decode_layer1(llsm_coder* c, FP_TYPE* src);
+/** @brief Reconstruct an LLSM frame (layer 0 representation) from a
+      fixed-dimensional vector, without going through layer 1. */
+llsm_container* llsm_coder_decode_layer0(llsm_coder* c, FP_TYPE* src);
+
 /** @} */
 
 #endif
