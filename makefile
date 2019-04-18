@@ -33,7 +33,8 @@ test: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-layer0-anasynth \
 	  $(OUT_DIR)/test-layer0-edgecase \
 	  $(OUT_DIR)/test-layer1-anasynth \
-	  $(OUT_DIR)/test-llsmrt
+	  $(OUT_DIR)/test-llsmrt \
+	  $(OUT_DIR)/test-coder
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-harmonic
@@ -42,6 +43,7 @@ test: $(OUT_DIR)/test-structs \
 	$(OUT_DIR)/test-layer0-edgecase
 	$(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-llsmrt
+	$(OUT_DIR)/test-coder
 
 test-layer0: $(OUT_DIR)/test-layer0-anasynth \
 	  $(OUT_DIR)/test-layer0-edgecase
@@ -51,6 +53,9 @@ test-layer0: $(OUT_DIR)/test-layer0-anasynth \
 
 test-layer1: $(OUT_DIR)/test-layer1-anasynth
 	$(OUT_DIR)/test-layer1-anasynth
+
+test-coder: $(OUT_DIR)/test-coder
+	$(OUT_DIR)/test-coder
 
 test-dsputils: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-dsputils \
