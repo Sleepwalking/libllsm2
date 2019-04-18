@@ -25,27 +25,35 @@ int main() {
 
   llsm_chunk_tolayer1(chunk, 2048);
 
-  llsm_chunk* reconstructed = llsm_create_chunk(chunk -> conf, 0);
+  llsm_chunk* reconstructed_0 = llsm_create_chunk(chunk -> conf, 0);
+  llsm_chunk* reconstructed_1 = llsm_create_chunk(chunk -> conf, 0);
   llsm_coder* coder = llsm_create_coder(chunk -> conf, 64, 5);
   for(int i = 0; i < nfrm; i ++) {
     FP_TYPE* enc = llsm_coder_encode(coder, chunk -> frames[i]);
-    reconstructed -> frames[i] = llsm_coder_decode_layer1(coder, enc);
+    reconstructed_0 -> frames[i] = llsm_coder_decode_layer0(coder, enc);
+    reconstructed_1 -> frames[i] = llsm_coder_decode_layer1(coder, enc);
     free(enc);
   }
   llsm_delete_coder(coder);
-
-  llsm_chunk_tolayer0(reconstructed);
-  llsm_chunk_phasepropagate(reconstructed, 1);
-
-  llsm_output* out = llsm_synthesize(opt_s, reconstructed);
-  wavwrite(out -> y, out -> ny, opt_s -> fs, 24, "test/test-coder.wav");
-  printf("Checking the reconstruction against the input...\n");
-  verify_data_distribution(x, nx, out -> y, out -> ny);
-  llsm_delete_output(out);
-
-  llsm_delete_chunk(reconstructed);
-
   llsm_delete_chunk(chunk);
+
+  llsm_chunk_tolayer0(reconstructed_1);
+  llsm_chunk_phasepropagate(reconstructed_0, 1);
+  llsm_chunk_phasepropagate(reconstructed_1, 1);
+
+  llsm_output* out0 = llsm_synthesize(opt_s, reconstructed_0);
+  llsm_output* out1 = llsm_synthesize(opt_s, reconstructed_1);
+  wavwrite(out0 -> y, out0 -> ny, opt_s -> fs, 24, "test/test-coder-0.wav");
+  wavwrite(out1 -> y, out1 -> ny, opt_s -> fs, 24, "test/test-coder-1.wav");
+  printf("Checking the reconstruction against the input...\n");
+  verify_data_distribution(x, nx, out0 -> y, out0 -> ny);
+  verify_data_distribution(x, nx, out1 -> y, out1 -> ny);
+  llsm_delete_output(out0);
+  llsm_delete_output(out1);
+
+  llsm_delete_chunk(reconstructed_0);
+  llsm_delete_chunk(reconstructed_1);
+
   llsm_delete_aoptions(opt_a);
   llsm_delete_soptions(opt_s);
   free(f0);

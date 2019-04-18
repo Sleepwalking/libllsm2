@@ -161,7 +161,8 @@ FP_TYPE* llsm_coder_encode(llsm_coder* c_, llsm_container* src) {
   return enc;
 }
 
-llsm_container* llsm_coder_decode_layer1(llsm_coder* c_, FP_TYPE* src) {
+static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
+  int use_layer1) {
   llsm_coder_* c = (llsm_coder_*)c_;
   int ns = c -> nfullspec / 2 + 1;
   int voicing = src[0] > 0.5;
@@ -222,7 +223,7 @@ llsm_container* llsm_coder_decode_layer1(llsm_coder* c_, FP_TYPE* src) {
   for(int j = 0; j < nm -> npsd; j ++)
     nm -> psd[j] = 10.0 / 2.30258 * log_2(nm -> psd[j]);
 
-  if(nhar > 0) {
+  if(nhar > 0 && use_layer1) {
     lfmodel gfm = lfmodel_from_rd(rd, 1.0 / f0, 1.0);
     FP_TYPE* lfmagnresp = lfmodel_spectrum(gfm, c -> faxis, ns, NULL);
     FP_TYPE* lfmagnf0 = lfmodel_spectrum(gfm, & f0, 1, NULL);
@@ -245,10 +246,45 @@ llsm_container* llsm_coder_decode_layer1(llsm_coder* c_, FP_TYPE* src) {
     free(lfmagnresp);
     free(lfmagnf0);
   }
+  if(nhar > 0 && ! use_layer1) {
+    llsm_hmframe* hm = llsm_create_hmframe(nhar);
+    llsm_container_attach(ret, LLSM_FRAME_HM, hm,
+      llsm_delete_hmframe, llsm_copy_hmframe);
+    FP_TYPE* harfreq = linspace(0, nhar * f0, nhar + 1);
+    FP_TYPE* ampl = interp1(c -> faxis, full_spec, ns, harfreq + 1, nhar);
+    for(int i = 0; i < nhar; i ++)
+      hm -> ampl[i] = ampl[i];
+    llsm_lipfilter(c -> liprad, f0, nhar, ampl, NULL, 1);
+    lfmodel gfm = lfmodel_from_rd(rd, 1.0 / f0, 1.0);
+    FP_TYPE* vsphse = calloc(nhar, sizeof(FP_TYPE));
+    // recover vocal tract magnitude response
+    FP_TYPE* lfmagnresp = lfmodel_spectrum(gfm, harfreq + 1, nhar, vsphse);
+    for(int i = 0; i < nhar; i ++) {
+      FP_TYPE vs_ampl = lfmagnresp[i] / (i + 1.0) / lfmagnresp[0];
+      ampl[i] /= vs_ampl;
+    }
+    // compute radiated phase
+    FP_TYPE* vtphse = llsm_harmonic_minphase(ampl, nhar);
+    llsm_lipfilter(c -> liprad, f0, nhar, NULL, vtphse, 0);
+    for(int i = 0; i < nhar; i ++)
+      hm -> phse[i] = vtphse[i] + vsphse[i];
+    free(harfreq);
+    free(ampl);
+    free(lfmagnresp);
+    free(vtphse);
+  }
 
   free(mel_psd);
   free(bap_pad);
   free(full_spec);
   free(full_noise);
   return ret;
+}
+
+llsm_container* llsm_coder_decode_layer1(llsm_coder* c, FP_TYPE* src) {
+  return llsm_coder_decode(c, src, 1);
+}
+
+llsm_container* llsm_coder_decode_layer0(llsm_coder* c, FP_TYPE* src) {
+  return llsm_coder_decode(c, src, 0);
 }
