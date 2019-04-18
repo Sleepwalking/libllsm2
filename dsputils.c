@@ -48,9 +48,9 @@ static int get_chebyshev_filter(FP_TYPE cutoff, char* type,
 
 static FP_TYPE* chebyfilt(FP_TYPE* x, int nx, FP_TYPE c1, FP_TYPE c2) {
   c1 = max(0.0, c1);
-  c2 = min(1.0, c2);
-  if(c1 != 0 && c2 != 1.0) {
-    FP_TYPE* x1 = chebyfilt(x , nx, c1, 1.0);
+  c2 = min(0.5, c2);
+  if(c1 != 0 && c2 < 0.5) {
+    FP_TYPE* x1 = chebyfilt(x , nx, c1, 0.5);
     FP_TYPE* y  = chebyfilt(x1, nx, 0.0, c2);
     free(x1);
     return y;
@@ -392,39 +392,40 @@ FP_TYPE* llsm_generate_bandlimited_noise(int nx, FP_TYPE fmin, FP_TYPE fmax) {
   return y;
 }
 
-void llsm_lipradiation(FP_TYPE* freq, int nfreq, FP_TYPE radius,
-  FP_TYPE* dst_ampl, FP_TYPE* dst_phse) {
+void llsm_lipfilter(FP_TYPE radius, FP_TYPE f0, int nhar,
+  FP_TYPE* dst_ampl, FP_TYPE* dst_phse, int inverse) {
   FP_TYPE Rr = 128.0 / 9.0 / M_PI / M_PI;
   FP_TYPE Lr = 8.0 * radius / 100.0 / 3.0 / M_PI / 340.0;
-  for(int i = 0; i < nfreq; i ++) {
+  for(int i = 0; i < nhar; i ++) {
+    FP_TYPE omega = f0 * (1.0 + i) * 2.0 * M_PI;
     cplx iresp = c_mul(c_cplx(0, 1),
-      c_div(c_cplx(freq[i] * 2.0 * M_PI * Lr * Rr, 0),
-            c_cplx(Rr, freq[i] * 2.0 * M_PI * Lr)
-      ));
-    if(dst_ampl) dst_ampl[i] = c_abs(iresp);
-    if(dst_phse) dst_phse[i] = c_arg(iresp);
+      c_div(c_cplx(omega * Lr * Rr, 0), c_cplx(Rr, omega * Lr)));
+    if(inverse) {
+      if(dst_ampl != NULL) dst_ampl[i] /= c_abs(iresp);
+      if(dst_phse != NULL) dst_phse[i] -= c_arg(iresp);
+    } else {
+      if(dst_ampl != NULL) dst_ampl[i] *= c_abs(iresp);
+      if(dst_phse != NULL) dst_phse[i] += c_arg(iresp);
+    }
   }
 }
 
-void llsm_lipfilter(FP_TYPE radius, FP_TYPE f0, int nhar,
-  FP_TYPE* dst_ampl, FP_TYPE* dst_phse, int inverse) {
-  FP_TYPE* tmp = calloc(nhar * 3, sizeof(FP_TYPE));
-  FP_TYPE* freq = tmp;
-  FP_TYPE* lip_ampl = tmp + nhar;
-  FP_TYPE* lip_phse = tmp + nhar * 2;
-  for(int i = 0; i < nhar; i ++) freq[i] = f0 * (1.0 + i);
-  llsm_lipradiation(freq, nhar, radius, lip_ampl, lip_phse);
-  if(inverse)
-    for(int i = 0; i < nhar; i ++) {
-      if(dst_ampl != NULL) dst_ampl[i] /= lip_ampl[i];
-      if(dst_phse != NULL) dst_phse[i] -= lip_phse[i];
-    }
-  else
-    for(int i = 0; i < nhar; i ++) {
-      if(dst_ampl != NULL) dst_ampl[i] *= lip_ampl[i];
-      if(dst_phse != NULL) dst_phse[i] += lip_phse[i];
-    }
-  free(tmp);
+void llsm_lipfilter_reim(FP_TYPE radius, FP_TYPE f0, int nhar,
+  FP_TYPE* dst_re, FP_TYPE* dst_im, int inverse) {
+  FP_TYPE Rr = 128.0 / 9.0 / M_PI / M_PI;
+  FP_TYPE Lr = 8.0 * radius / 100.0 / 3.0 / M_PI / 340.0;
+  for(int i = 0; i < nhar; i ++) {
+    FP_TYPE omega = f0 * (1.0 + i) * 2.0 * M_PI;
+    cplx iresp = c_mul(c_cplx(0, 1),
+      c_div(c_cplx(omega * Lr * Rr, 0), c_cplx(Rr, omega * Lr)));
+    cplx y;
+    if(inverse)
+      y = c_div(c_cplx(dst_re[i], dst_im[i]), iresp);
+    else
+      y = c_mul(c_cplx(dst_re[i], dst_im[i]), iresp);
+    dst_re[i] = y.real;
+    dst_im[i] = y.imag;
+  }
 }
 
 FP_TYPE* llsm_harmonic_spectrum(FP_TYPE* ampl, int nhar, FP_TYPE f0,

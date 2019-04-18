@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -24,11 +24,8 @@
 #include "llsmrt.h"
 #include "buffer.h"
 #include "dsputils.h"
+#include "llsmutils.h"
 #include "external/ciglet/ciglet.h"
-
-// Implemented in layer0.c
-FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
-  FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx);
 
 typedef struct {
   int nout;      // number of output samples left in buffer_out
@@ -41,11 +38,17 @@ typedef struct {
   FP_TYPE fs;    // sampling rate (in Hz)
   FP_TYPE thop;  // hop size (in seconds)
   FP_TYPE cycle; // current position relative to floored sample position
+                 //   (in seconds)
+  FP_TYPE pulse; // the most recent pulse location relative to floored sample
+                 //   position (in samples)
   int curr_nhop; // rounding-adjusted current hop size (in samples)
+  int next_nhop; // rounding-adjusted next hop size (in samples)
   int exc_cycle; // current position in the noise template
   int sin_pos;   // read position of the sinusoid buffer
   FP_TYPE* win;  // overlap-add window
   int nfft;      // FFT size for noise filtering
+  int pbp_offset; // sample offset for mixing pulses into buffer_sin
+  int pbp_state;  // on = 1, off = 0
   llsm_nmframe* prev_nm; // the previous noise model frame
 
   llsm_ringbuffer*  buffer_out;       // output buffer of audio samples
@@ -56,11 +59,13 @@ typedef struct {
   llsm_ringbuffer*  buffer_exc_mix;   // buffer for the sum of noise excitation
   llsm_ringbuffer*  buffer_noise;     // buffer for the filtered noise
   llsm_ringbuffer*  buffer_sin;       // buffer for the sinusoidal component
+  llsm_dualbuffer*  buffer_pulse;     // buffer for the sum of pulses (PBPSYN)
 
   FP_TYPE* buffer_psd; // size: nspec
   FP_TYPE* buffer_fft; // size: nfft * 4
   FP_TYPE* buffer_rawexc; // size: ninternal
   FP_TYPE* buffer_rawmod; // size: ninternal
+  FP_TYPE* buffer_phase;  // size: nfft
   FP_TYPE* warp_axis;  // size: nspec
 
 # ifdef USE_PTHREAD
@@ -89,8 +94,8 @@ static void llsm_make_exc_template(llsm_rtsynth_buffer_* dst,
     FP_TYPE fmin = c == 0 ? 0 : chanfreq[c - 1];
     FP_TYPE fmax = c == dst -> nchannel - 1 ? fs / 2.0 : chanfreq[c];
     if(fmin >= fs / 2.0) break;
-    FP_TYPE* x = llsm_generate_bandlimited_noise(dst -> ntemplate,
-      fmin / fs * 2.0, fmax / fs * 2.0);
+    FP_TYPE* x = llsm_generate_bandlimited_noise(
+      dst -> ntemplate, fmin / fs, fmax / fs);
     for(int j = 0; j < dst -> ntemplate; j ++)
       dst -> exc_template_comps[c][j] = llsm_get_circular_noise(x,
         dst -> ntemplate, j);
@@ -100,16 +105,24 @@ static void llsm_make_exc_template(llsm_rtsynth_buffer_* dst,
 
 // Prepare for synthesizing the next frame.
 static void llsm_update_cycle(llsm_rtsynth_buffer_* dst) {
+  int prev_nhop = dst -> curr_nhop;
+  dst -> cycle += dst -> thop;
+  dst -> curr_nhop = floor(dst -> cycle * dst -> fs);
+
+  dst -> cycle -= (FP_TYPE)prev_nhop / dst -> fs;
+  dst -> pulse -= prev_nhop;
+  if(dst -> pbp_state && dst -> pbp_offset > dst -> sin_pos + dst -> curr_nhop)
+    dst -> pbp_offset -= prev_nhop;
+  int nwin = dst -> curr_nhop * 2;
+  free(dst -> win); dst -> win = hanning_2(nwin);
+  
+  dst -> next_nhop = floor((dst -> cycle + dst -> thop) * dst -> fs);
+
   for(int c = 0; c < dst -> nchannel; c ++)
     llsm_ringbuffer_appendblank(dst -> buffer_mod_comps[c], dst -> curr_nhop);
   llsm_ringbuffer_appendblank(dst -> buffer_sin, dst -> curr_nhop);
   llsm_ringbuffer_appendblank(dst -> buffer_noise, dst -> curr_nhop);
-  dst -> cycle += dst -> thop;
-  dst -> curr_nhop = floor(dst -> cycle * dst -> fs);
-  dst -> cycle -= (FP_TYPE)dst -> curr_nhop / dst -> fs;
-  int nwin = dst -> curr_nhop * 2;
-  free(dst -> win);
-  dst -> win = hanning_2(nwin);
+  llsm_dualbuffer_forward(dst -> buffer_pulse, dst -> curr_nhop);
 }
 
 // Assuming the modulation component buffers all have been loaded with the
@@ -157,16 +170,21 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
   ret -> fs = options -> fs;
   ret -> thop = *thop;
   ret -> cycle = 0;
+  ret -> pulse = 0;
   ret -> curr_nhop = 0;
+  ret -> next_nhop = 0;
   ret -> exc_cycle = 0;
   ret -> win = NULL;
   ret -> nfft = pow(2, ceil(log2(*thop * ret -> fs * 2.2 + 32)));
+  ret -> pbp_offset = 0;
+  ret -> pbp_state = 0;
   ret -> prev_nm = NULL;
 
   ret -> buffer_out = llsm_create_ringbuffer(capacity_samples);
   ret -> buffer_exc_mix = llsm_create_ringbuffer(ret -> ninternal);
   ret -> buffer_noise = llsm_create_ringbuffer(ret -> ninternal);
   ret -> buffer_sin   = llsm_create_ringbuffer(ret -> ninternal);
+  ret -> buffer_pulse = llsm_create_dualbuffer(ret -> ninternal);
 
   ret -> exc_template_comps = malloc2d(*nchannel, ret -> ntemplate,
     sizeof(FP_TYPE));
@@ -181,6 +199,7 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
   ret -> buffer_fft = calloc(ret -> nfft * 4, sizeof(FP_TYPE));
   ret -> buffer_rawexc = calloc(ret -> ninternal, sizeof(FP_TYPE));
   ret -> buffer_rawmod = calloc(ret -> ninternal, sizeof(FP_TYPE));
+  ret -> buffer_phase  = calloc(ret -> nfft, sizeof(FP_TYPE));
   ret -> warp_axis = llsm_warp_frequency(0, fnyq, npsd, noswarp);
 
 # ifdef USE_PTHREAD
@@ -208,6 +227,7 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
   llsm_delete_ringbuffer(dst -> buffer_sin);
+  llsm_delete_dualbuffer(dst -> buffer_pulse);
   for(int i = 0; i < dst -> nchannel; i ++)
     llsm_delete_ringbuffer(dst -> buffer_mod_comps[i]);
   llsm_delete_nmframe(dst -> prev_nm);
@@ -218,6 +238,7 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   free(dst -> buffer_fft);
   free(dst -> buffer_rawexc);
   free(dst -> buffer_rawmod);
+  free(dst -> buffer_phase);
   free(dst -> warp_axis);
 # ifdef USE_PTHREAD
   pthread_mutex_destroy(& dst -> buffer_out_mtx);
@@ -235,12 +256,9 @@ static void llsm_rtsynth_buffer_feed_modcomps(llsm_rtsynth_buffer_* dst,
     llsm_hmframe* hm = f0 > 0 ? nm -> eenv[c] : unvoiced_hm;
     FP_TYPE* x = llsm_synthesize_harmonic_frame_auto(& dst -> opt,
       hm -> ampl, hm -> phse, hm -> nhar, f0 / dst -> fs, nwin);
-    FP_TYPE x_min = minfp(x, nwin);
     FP_TYPE offset = nm -> edc[c];
-    if(x_min < - nm -> edc[c]) offset = -x_min;
-    for(int i = 0; i < nwin; i ++) {
-      x[i] = (x[i] + offset + 1e-8) * dst -> win[i];
-    }
+    for(int i = 0; i < nwin; i ++)
+      x[i] = (max(x[i] + offset, 1e-8)) * dst -> win[i];
     llsm_ringbuffer_addchunk(dst -> buffer_mod_comps[c], -nwin, nwin, x);
     free(x);
   }
@@ -252,27 +270,157 @@ static void llsm_rtsynth_buffer_feed_sinusoids(llsm_rtsynth_buffer_* dst,
   llsm_container* frame) {
   FP_TYPE* f0 = llsm_container_get(frame, LLSM_FRAME_F0);
   llsm_hmframe* hm = llsm_container_get(frame, LLSM_FRAME_HM);
+  FP_TYPE* phase = dst -> buffer_phase;
   if(hm != NULL && f0 != NULL && *f0 > 0) {
+    FP_TYPE phase_shift = dst -> cycle * 2 * M_PI * (*f0);
+    int nhar = min(hm -> nhar, dst -> nfft);
+    for(int k = 0; k < nhar; k ++)
+      phase[k] = hm -> phse[k] - phase_shift * (k + 1.0);
     FP_TYPE* x = llsm_synthesize_harmonic_frame_auto(& dst -> opt,
-      hm -> ampl, hm -> phse, hm -> nhar, *f0 / dst -> fs,
-      dst -> curr_nhop * 2);
+      hm -> ampl, phase, nhar, *f0 / dst -> fs, dst -> curr_nhop * 2);
     for(int i = 0; i < dst -> curr_nhop * 2; i ++)
       x[i] *= dst -> win[i];
     llsm_ringbuffer_addchunk(dst -> buffer_sin, -dst -> curr_nhop * 2,
       dst -> curr_nhop * 2, x);
     free(x);
   }
+}
+
+// Synthesize deterministic component (semi-harmonic excitation and 
+//   noise envelope components).
+static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
+  llsm_container* frame) {
+  FP_TYPE* f0 = llsm_container_get(frame, LLSM_FRAME_F0);
   llsm_nmframe* nm = llsm_container_get(frame, LLSM_FRAME_NM);
   if(nm != NULL)
     llsm_rtsynth_buffer_feed_modcomps(dst, nm, f0 == NULL ? 0 : *f0);
+  if(! dst -> opt.use_l1) {
+    llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
+    return;
+  }
+  int nhop = dst -> curr_nhop;
+
+  FP_TYPE* vsphse = llsm_container_get(frame, LLSM_FRAME_VSPHSE);
+  FP_TYPE* rd = llsm_container_get(frame, LLSM_FRAME_RD);
+  int* pbpsyn = llsm_container_get(frame, LLSM_FRAME_PBPSYN);
+  llsm_pbpeffect* pbpeff = llsm_container_get(frame, LLSM_FRAME_PBPEFF);
+  if(vsphse == NULL || rd == NULL || *f0 == 0) return;
+  int pbp_on = pbpsyn != NULL && pbpsyn[0] == 1;
+  int nspec = *((int*)llsm_container_get(dst -> conf, LLSM_CONF_NSPEC));
+
+  // update locations of pulses locked onto the first source harmonic
+  FP_TYPE len_period = dst -> fs / f0[0];
+  FP_TYPE t_period = 1.0 / f0[0];
+  lfmodel source_model = lfmodel_from_rd(*rd, t_period, 1.0);
+  FP_TYPE source_p0 = 0;
+  free(lfmodel_spectrum(source_model, f0, 1, & source_p0));
+  source_p0 -= 0.5 * M_PI; // integrate (flow derivative to flow velocity)
+  FP_TYPE p0 = wrap(vsphse[0]);
+  FP_TYPE p0_dist = phase_diff(source_p0, p0);
+  if(p0_dist < 0) p0_dist += 2.0 * M_PI;
+  // the next position where a glottal flow cycle begins (relative to
+  //   -curr_nhop in the buffer)
+  FP_TYPE pulse_projected = p0_dist / 2 / M_PI * len_period;
+  // reset the pulse tracker after unvoiced part
+  int len_reset = max(len_period, nhop) * 2;
+  if(pulse_projected - dst -> pulse > len_reset)
+    dst -> pulse = pulse_projected - len_reset;
+  int num_periods = round((pulse_projected - dst -> pulse) / len_period);
+  if(num_periods > 0)
+    len_period = (pulse_projected - dst -> pulse) / num_periods;
+  int pulse_size = pow(2, ceil(log2(max(len_period * 2, nspec))));
+  
+  FP_TYPE* fnyq = llsm_container_get(dst -> conf, LLSM_CONF_FNYQ);
+  FP_TYPE* liprad = llsm_container_get(dst -> conf, LLSM_CONF_LIPRADIUS);
+  
+  int pbp_onset = 0;
+  int pbp_termination = 0;
+  if(pbp_on && ! dst -> pbp_state) {
+    pbp_onset = 1;
+    dst -> pbp_state = 1;
+    dst -> pbp_offset = -nhop;
+    if(llsm_container_get(frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(frame, dst -> conf);
+    llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
+  }
+  if(! pbp_on && dst -> pbp_state) {
+    pbp_termination = 1;
+    dst -> pbp_state = 0;
+    num_periods += ceil((-dst -> pbp_offset) / len_period);
+  }
+  
+  // Pulse OLA
+  if(dst -> pbp_state || pbp_termination) {
+    int period_begin = pbp_onset ? -2 : 0;
+    int period_end = num_periods;
+    int num_pulses = period_end - period_begin;
+    int pre_rotate = min(len_period, nhop * 2);
+    if(num_pulses > 0) {
+      FP_TYPE* offsets = calloc(num_pulses, sizeof(FP_TYPE));
+      lfmodel* sources = calloc(num_pulses, sizeof(lfmodel));
+      for(int i = 0; i < num_pulses; i ++) {
+        FP_TYPE delta_t = 0;
+        if(pbpeff != NULL) {
+          llsm_gfm g = llsm_lfmodel_to_gfm(source_model);
+          pbpeff -> modifier(& g, & delta_t, pbpeff -> info, frame);
+          sources[i] = llsm_gfm_to_lfmodel(g);
+        } else
+          sources[i] = source_model;
+        offsets[i] = dst -> pulse + (i + period_begin) * len_period
+                   + delta_t * dst -> fs;
+      }
+      int pulse_base = offsets[0];
+      for(int i = 0; i < num_pulses; i ++) offsets[i] -= pulse_base;
+      FP_TYPE* y = llsm_make_filtered_pulse(frame, sources, offsets,
+        num_pulses, pre_rotate, pulse_size, *fnyq, *liprad, dst -> fs);
+      llsm_dualbuffer_addchunk(dst -> buffer_pulse,
+        pulse_base - pre_rotate - nhop, pulse_size, y);
+      free(y);
+      free(offsets);
+      free(sources);
+    }
+  }
+  if(! dst -> pbp_state) {
+    if(llsm_container_get(frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(frame, dst -> conf);
+    llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
+  }
+  dst -> pulse = pulse_projected;
+  
+  if(dst -> pbp_state &&
+     dst -> pbp_offset <= dst -> sin_pos + nhop) {
+    FP_TYPE* x = calloc(nhop * 2, sizeof(FP_TYPE));
+    llsm_dualbuffer_readchunk(
+      dst -> buffer_pulse, dst -> pbp_offset, nhop * 2, x);
+    for(int i = 0; i < nhop * 2; i ++)
+      x[i] *= dst -> win[i];
+    llsm_ringbuffer_addchunk(
+      dst -> buffer_sin, dst -> pbp_offset, nhop * 2, x);
+    free(x);
+  }
+  if(pbp_termination) {
+    // Overlap-add PbP results using a trapezoid-like window to catch up
+    //   with the harmonic model.
+    int size = -nhop - dst -> pbp_offset;
+    FP_TYPE* x = calloc(size, sizeof(FP_TYPE));
+    llsm_dualbuffer_readchunk(
+      dst -> buffer_pulse, dst -> pbp_offset, size, x);
+    for(int i = 0; i < nhop; i ++) {
+      x[i] *= dst -> win[i];
+      x[size - nhop + i] *= dst -> win[i + nhop];
+    }
+    llsm_ringbuffer_addchunk(
+      dst -> buffer_sin, dst -> pbp_offset, size, x);
+    free(x);
+  }
 }
 
 static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   const int nfade = 16;
   int nfft = dst -> nfft;
-  int lag = nfft / 2;
-  int nspec = lag + 1;
-  int nwin = dst -> curr_nhop * 2;
+  int nspec = nfft / 2 + 1;
+  int nhop = dst -> curr_nhop;
+  int nwin = nhop * 2;
   FP_TYPE wsqr = 0;
   for(int i = 0; i < nwin; i ++)
     wsqr += dst -> win[i] * dst -> win[i];
@@ -289,10 +437,10 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
     // STFT
-    llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -lag - dst -> curr_nhop,
-      nwin, x_re + nfft / 2 - nwin / 2);
+    llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -nhop * 2,
+      nwin, x_re + nfft / 2 - nhop);
     for(int i = 0; i < nwin; i ++)
-      x_re[i - nwin / 2 + nfft / 2] *= dst -> win[i];
+      x_re[i - nhop + nfft / 2] *= dst -> win[i];
     fft(x_re, NULL, x_re, x_im, nfft, fftbuffer + nfft * 2);
 
     // PSD -> warp -> diff
@@ -300,7 +448,8 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, dst -> fs / 2.0,
       warp_axis, npsd);
     for(int i = 0; i < npsd; i ++)
-      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3026) / sqrt(env[i] + 1e-8);
+      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3025851)
+             / sqrt(env[i] * 44100 / dst -> fs + 1e-8);
 
     // filter
     FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,
@@ -324,21 +473,21 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
 }
 
 static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {
-  FP_TYPE* x_nos = calloc(dst -> curr_nhop, sizeof(FP_TYPE));
-  FP_TYPE* x_sin = calloc(dst -> curr_nhop, sizeof(FP_TYPE));
+  FP_TYPE* x_nos = calloc(dst -> next_nhop, sizeof(FP_TYPE));
+  FP_TYPE* x_sin = calloc(dst -> next_nhop, sizeof(FP_TYPE));
   llsm_ringbuffer_readchunk(dst -> buffer_noise,
-    -dst -> nfft, dst -> curr_nhop, x_nos);
+    -dst -> nfft, dst -> next_nhop, x_nos);
   llsm_ringbuffer_readchunk(dst -> buffer_sin,
-    dst -> sin_pos, dst -> curr_nhop, x_sin);
-  for(int i = 0; i < dst -> curr_nhop; i ++)
+    dst -> sin_pos, dst -> next_nhop, x_sin);
+  for(int i = 0; i < dst -> next_nhop; i ++)
     x_nos[i] += x_sin[i];
 # ifdef USE_PTHREAD
   pthread_mutex_lock(& dst -> buffer_out_mtx);
-  while(dst -> nout > dst -> buffer_out -> capacity - dst -> curr_nhop)
+  while(dst -> nout > dst -> buffer_out -> capacity - dst -> next_nhop)
     pthread_cond_wait(& dst -> buffer_out_cv, & dst -> buffer_out_mtx);
 # endif
-  llsm_ringbuffer_appendchunk(dst -> buffer_out, dst -> curr_nhop, x_nos);
-  dst -> nout += dst -> curr_nhop;
+  llsm_ringbuffer_appendchunk(dst -> buffer_out, dst -> next_nhop, x_nos);
+  dst -> nout += dst -> next_nhop;
 # ifdef USE_PTHREAD
   pthread_cond_broadcast(& dst -> buffer_out_cv);
   pthread_mutex_unlock(& dst -> buffer_out_mtx);
@@ -351,7 +500,7 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* ptr,
   llsm_container* frame) {
   llsm_rtsynth_buffer_* dst = ptr;
   llsm_update_cycle(dst);
-  llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
+  llsm_rtsynth_buffer_feed_deterministic(dst, frame);
   llsm_run_excitation_buffers(dst, dst -> curr_nhop);
   llsm_rtsynth_buffer_feed_filter(dst);
   llsm_rtsynth_buffer_feed_mix(dst);
@@ -395,17 +544,22 @@ void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* ptr) {
   llsm_rtsynth_buffer_* dst = ptr;
   int capacity_samples = dst -> buffer_out -> capacity;
   dst -> nout = 0;
-  dst -> cycle = 0;
-  dst -> exc_cycle = 0;
   llsm_delete_ringbuffer(dst -> buffer_out);
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
   llsm_delete_ringbuffer(dst -> buffer_sin);
+  llsm_delete_dualbuffer(dst -> buffer_pulse);
   dst -> buffer_out = llsm_create_ringbuffer(capacity_samples);
   dst -> buffer_exc_mix = llsm_create_ringbuffer(dst -> ninternal);
   dst -> buffer_noise = llsm_create_ringbuffer(dst -> ninternal);
   dst -> buffer_sin   = llsm_create_ringbuffer(dst -> ninternal);
+  dst -> buffer_pulse = llsm_create_dualbuffer(dst -> ninternal);
   dst -> curr_nhop = 1;
+  dst -> pbp_offset = 0;
+  dst -> pbp_state = 0;
   llsm_update_cycle(dst);
+  dst -> cycle = 0;
+  dst -> pulse = 0;
+  dst -> exc_cycle = 0;
   dst -> sin_pos = -dst -> curr_nhop * 2 - dst -> nfft / 2;
 }

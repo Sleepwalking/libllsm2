@@ -226,3 +226,19 @@ int llsm_frame_checklayer1(llsm_container* src) {
      nm == NULL) return 0;
   return 1;
 }
+
+llsm_pbpeffect* llsm_create_pbpeffect(llsm_fgfm modifier, void* info) {
+  llsm_pbpeffect* ret = malloc(sizeof(llsm_pbpeffect));
+  ret -> modifier = modifier;
+  ret -> info = info;
+  return ret;
+}
+
+llsm_pbpeffect* llsm_copy_pbpeffect(llsm_pbpeffect* src) {
+  return llsm_create_pbpeffect(src -> modifier, src -> info);
+}
+
+void llsm_delete_pbpeffect(llsm_pbpeffect* dst) {
+  if(dst == NULL) return;
+  free(dst);
+}

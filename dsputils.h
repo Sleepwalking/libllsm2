@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -90,14 +90,13 @@ FP_TYPE* llsm_generate_white_noise(int nx);
 /** @brief Generate a bandlimited Gaussian noise of length nx. */
 FP_TYPE* llsm_generate_bandlimited_noise(int nx, FP_TYPE fmin, FP_TYPE fmax);
 
-/** @brief Generate a lip radiation frequency response at designated
- *    frequencies. */
-void llsm_lipradiation(FP_TYPE* freq, int nfreq, FP_TYPE radius,
-  FP_TYPE* dst_ampl, FP_TYPE* dst_phse);
-
-/** @brief Apply or remove lip radiation from a harmonic model. */
+/** @brief Apply or remove lip radiation from a spectrum or harmonic model. */
 void llsm_lipfilter(FP_TYPE radius, FP_TYPE f0, int nhar,
   FP_TYPE* dst_ampl, FP_TYPE* dst_phse, int inverse);
+
+/** @brief Complex form of llsm_lipfilter. */
+void llsm_lipfilter_reim(FP_TYPE radius, FP_TYPE f0, int nhar,
+  FP_TYPE* dst_re, FP_TYPE* dst_im, int inverse);
 
 /** @brief Generate a 3-period hanning-windowed spectrum from a zero-phase
  *    harmonic model. */

@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2018 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
+#include "llsmutils.h"
 #include "external/ciglet/ciglet.h"
 
 llsm_aoptions* llsm_create_aoptions() {
@@ -80,6 +81,7 @@ llsm_soptions* llsm_create_soptions(FP_TYPE fs) {
   ret -> fs = fs;
   // See test/test-harmonic.c for more information.
   ret -> use_iczt = 1;
+  ret -> use_l1 = 0;
   ret -> iczt_param_a = 0.275;
   ret -> iczt_param_b = 2.26;
   return ret;
@@ -113,41 +115,176 @@ static void llsm_analyze_harmonics(llsm_aoptions* options, FP_TYPE* x, int nx,
   free2d(tmp_ampl, nfrm); free2d(tmp_phse, nfrm); free(tmp_nhar);
 }
 
-FP_TYPE* llsm_synthesize_harmonic_frame_auto(llsm_soptions* options,
-  FP_TYPE* ampl, FP_TYPE* phse, int nhar, FP_TYPE f0, int nx) {
-  FP_TYPE* ret = NULL;
-  if(options == NULL || (! options -> use_iczt))
-    ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
-  else {
-    if(log_1(nx) * options -> iczt_param_a <
-       log_1(nhar) - options -> iczt_param_b)
-      ret = llsm_synthesize_harmonic_frame_iczt(ampl, phse, nhar, f0, nx);
-    else
-      ret = llsm_synthesize_harmonic_frame(ampl, phse, nhar, f0, nx);
-  }
-  return ret;
-}
-
-static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
+static FP_TYPE* llsm_synthesize_harmonics_l0(llsm_soptions* options,
   llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+  const int maxnhar = 2048;
   FP_TYPE* y = calloc(ny, sizeof(FP_TYPE));
-  int nwin = round(thop * 2.0 * fs);
+  int nwin = round(thop * fs) * 2;
   FP_TYPE* w = hanning(nwin);
+  FP_TYPE* phase = calloc(maxnhar, sizeof(FP_TYPE));
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue; // skip unvoiced frames
     llsm_hmframe* hm = llsm_container_get(chunk -> frames[i], LLSM_FRAME_HM);
+    FP_TYPE rawidx = i * thop * fs;
+    int baseidx = round(rawidx);
+    FP_TYPE phase_correction = (rawidx - baseidx) * 2 * M_PI / fs * f0[i];
+    int nhar = min(maxnhar, hm -> nhar);
+    for(int k = 0; k < nhar; k ++)
+      phase[k] = hm -> phse[k] - phase_correction * (k + 1.0);
     FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
-      hm -> ampl, hm -> phse, hm -> nhar, f0[i] / fs, nwin);
+      hm -> ampl, phase, nhar, f0[i] / fs, nwin);
     for(int j = 0; j < nwin; j ++) {
       yi[j] *= w[j];
-      int idx = round((i - 1) * thop * fs + j);
+      int idx = baseidx + j - nwin / 2;
       if(idx >= 0 && idx < ny)
         y[idx] += yi[j];
     }
     free(yi);
   }
+  free(phase);
   free(w);
   return y;
+}
+
+static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
+  llsm_chunk* chunk, FP_TYPE* f0, int nfrm, FP_TYPE thop, FP_TYPE fs, int ny) {
+  if(! options -> use_l1) {
+    return llsm_synthesize_harmonics_l0(
+      options, chunk, f0, nfrm, thop, fs, ny);
+  }
+  
+  const int maxnhar = 2048;
+  FP_TYPE* y_hm  = calloc(ny, sizeof(FP_TYPE)); // harmonic model
+  FP_TYPE* y_pbp = calloc(ny, sizeof(FP_TYPE)); // pulse-by-pulse synthesis
+  FP_TYPE* y_mix = calloc(ny, sizeof(FP_TYPE));
+  int nwin = round(thop * fs) * 2;
+  FP_TYPE* w = hanning(nwin);
+  FP_TYPE* fnyq = llsm_container_get(chunk -> conf, LLSM_CONF_FNYQ);
+  FP_TYPE* liprad = llsm_container_get(chunk -> conf, LLSM_CONF_LIPRADIUS);
+  
+  FP_TYPE pulse_previous = 0; // aligned to zero-time phase of glottal flow
+  int pbp_periods = 0;
+  int pbp_periods_thrd = 3;
+  FP_TYPE pbp_switch_rate = 0;
+  FP_TYPE pbp_switch_state = 0;
+  int baseidx_prev = 0;
+  
+  for(int i = 0; i < nfrm; i ++) {
+    if(f0[i] == 0) continue; // skip unvoiced frames
+    int baseidx = i * thop * fs;
+    llsm_container* src_frame = chunk -> frames[i];
+    FP_TYPE* vsphse = llsm_container_get(src_frame, LLSM_FRAME_VSPHSE);
+    FP_TYPE* vtmagn = llsm_container_get(src_frame, LLSM_FRAME_VTMAGN);
+    FP_TYPE* rd = llsm_container_get(src_frame, LLSM_FRAME_RD);
+    int* pbpsyn = llsm_container_get(src_frame, LLSM_FRAME_PBPSYN);
+    llsm_pbpeffect* pbpeff = llsm_container_get(src_frame, LLSM_FRAME_PBPEFF);
+    if(vsphse == NULL || vtmagn == NULL || rd == NULL) continue;
+    int pbp_on = pbpsyn != NULL && pbpsyn[0] == 1;
+    int nspec = llsm_fparray_length(vtmagn);
+    // update locations of pulses locked onto the first source harmonic
+    FP_TYPE len_period = fs / f0[i];
+    FP_TYPE t_period = 1.0 / f0[i];
+    lfmodel source_model = lfmodel_from_rd(*rd, t_period, 1.0);
+    FP_TYPE source_p0 = 0;
+    free(lfmodel_spectrum(source_model, & f0[i], 1, & source_p0));
+    source_p0 -= 0.5 * M_PI; // integrate (flow derivative to flow velocity)
+    FP_TYPE p0 = wrap(vsphse[0]);
+    FP_TYPE p0_dist = phase_diff(source_p0, p0);
+    if(p0_dist < 0) p0_dist += 2.0 * M_PI;
+    // the next position where a glottal flow cycle begins
+    FP_TYPE pulse_projected = baseidx + p0_dist / 2 / M_PI * len_period;
+    // reset the pulse tracker after unvoiced part
+    int len_reset = max(len_period, thop * fs) * 2;
+    if(pulse_projected - pulse_previous > len_reset)
+      pulse_previous = pulse_projected - len_reset;
+    int num_periods = round((pulse_projected - pulse_previous) / len_period);
+    len_period = (pulse_projected - pulse_previous) / num_periods;
+    int pulse_size = pow(2, ceil(log2(max(len_period * 2, nspec))));
+    
+    // pulse-by-pulse synthesis
+    if(pbp_on || pbp_periods > 0) {
+      if(num_periods > 0) {
+        FP_TYPE* offsets = calloc(num_periods, sizeof(FP_TYPE));
+        lfmodel* sources = calloc(num_periods, sizeof(lfmodel));
+        for(int j = 0; j < num_periods; j ++) {
+          FP_TYPE delta_t = 0;
+          if(pbpeff != NULL) {
+            llsm_gfm g = llsm_lfmodel_to_gfm(source_model);
+            pbpeff -> modifier(& g, & delta_t, pbpeff -> info, src_frame);
+            sources[j] = llsm_gfm_to_lfmodel(g);
+          } else
+            sources[j] = source_model;
+          offsets[j] = pulse_previous + j * len_period + delta_t * fs;
+        }
+        int pulse_base = offsets[0];
+        for(int j = 0; j < num_periods; j ++) offsets[j] -= pulse_base;
+        FP_TYPE* y = llsm_make_filtered_pulse(src_frame, sources, offsets,
+          num_periods, len_period, pulse_size, *fnyq, *liprad, fs);
+        for(int k = 0; k < pulse_size; k ++) {
+          int idx = pulse_base + k - len_period;
+          if(idx >= 0 && idx < ny) y_pbp[idx] += y[k];
+        }
+        free(y);
+        free(offsets);
+        free(sources);
+        pbp_periods += pbp_on ? num_periods : -num_periods;
+        pbp_periods = min(pbp_periods, pbp_periods_thrd);
+        pbp_periods = max(pbp_periods, 0);
+      }
+    }
+    pulse_previous = pulse_projected;
+
+    pbp_switch_rate = 1.0 / min(len_period, thop * fs);
+    int require_hm = 0;
+    if(pbp_on && pbp_periods == pbp_periods_thrd) {
+      for(int j = baseidx_prev; j < baseidx; j ++) {
+        if(pbp_switch_state < 1.0) {
+          pbp_switch_state += pbp_switch_rate;
+          require_hm = 1;
+        }
+        y_mix[j] = pbp_switch_state;
+      }
+    } else
+    if(! pbp_on && pbp_periods == 0) {
+      for(int j = baseidx_prev; j < baseidx; j ++) {
+        if(pbp_switch_state > 0) {
+          pbp_switch_state -= pbp_switch_rate;
+          require_hm = 1;
+        }
+        y_mix[j] = pbp_switch_state;
+      }
+    } else {
+      for(int j = baseidx_prev; j < baseidx; j ++)
+        y_mix[j] = pbp_switch_state;
+    }
+    baseidx_prev = baseidx;
+    
+    if(pbp_on && pbp_periods == pbp_periods_thrd && (! require_hm)) continue;
+    
+    // harmonic model synthesis
+    if(llsm_container_get(src_frame, LLSM_FRAME_HM) == NULL)
+      llsm_frame_tolayer0(src_frame, chunk -> conf);
+    llsm_hmframe* hm = llsm_container_get(src_frame, LLSM_FRAME_HM);
+    if(hm == NULL) continue;
+    int nhar = min(maxnhar, hm -> nhar);
+    FP_TYPE* yi = llsm_synthesize_harmonic_frame_auto(options,
+      hm -> ampl, hm -> phse, nhar, f0[i] / fs, nwin);
+    for(int j = 0; j < nwin; j ++) {
+      yi[j] *= w[j];
+      int idx = baseidx + j - nwin / 2;
+      if(idx >= 0 && idx < ny)
+        y_hm[idx] += yi[j];
+    }
+    free(yi);
+  }
+  free(w);
+
+  for(int i = 0; i < ny; i ++)
+    y_mix[i] = y_hm[i] * (1.0 - y_mix[i]) + y_pbp[i] * y_mix[i];
+
+  free(y_hm);
+  free(y_pbp);
+  return y_mix;
 }
 
 static FP_TYPE* llsm_synthesize_noise_envelope(llsm_soptions* options,
@@ -198,8 +335,9 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x_res,
     FP_TYPE* wpsd = llsm_spectral_mean(frame_psd, nspec - 1, fs / 2.0,
       warp_axis, options -> npsd);
     // The PSD is squared and hence 10 * log10(.)
+    // -120 dB noise floor for underflow protection.
     for(int j = 0; j < options -> npsd; j ++)
-      dst_nm -> psd[j] = 10.0 * log10(wpsd[j]);
+      dst_nm -> psd[j] = 10.0 * log10(wpsd[j] * 44100 / fs + 1e-12);
     free(xfrm); free(wpsd);
   }
   free(warp_axis);
@@ -229,7 +367,7 @@ static void llsm_analyze_noise_envelope(llsm_aoptions* options,
     // Trick: extract envelope from the original waveform in high frequencies
     //   where the residual is often smeared due to harmonic analysis errors.
     FP_TYPE* ce = llsm_subband_energy(
-      fmin > 6000.0 ? x : x_res, nx, fmin / fs * 2.0, fmax / fs * 2.0);
+      fmin > 6000.0 ? x : x_res, nx, fmin / fs, fmax / fs);
     // Perform harmonic analysis on a squared signal and extract the lower
     //   harmonics is roughly equivalent to modeling the RMS envelope.
     llsm_harmonic_analysis(ce, nx, fs, f0, nfrm, options -> thop,
@@ -287,7 +425,7 @@ llsm_chunk* llsm_analyze(llsm_aoptions* options, FP_TYPE* x, int nx,
 
   // harmonic analysis and residual extraction
   llsm_analyze_harmonics(options, x, nx, fs, f0, nfrm, ret);
-  FP_TYPE* x_sin = llsm_synthesize_harmonics(NULL, ret, f0, nfrm,
+  FP_TYPE* x_sin = llsm_synthesize_harmonics_l0(NULL, ret, f0, nfrm,
     options -> thop, fs, nx);
   FP_TYPE* x_res = calloc(nx, sizeof(FP_TYPE));
   for(int i = 0; i < nx; i ++) x_res[i] = x[i] - x_sin[i];
@@ -319,7 +457,8 @@ static int llsm_synthesis_check_integrity(llsm_chunk* src) {
   if(! llsm_conf_checklayer0(src -> conf)) return 0;
   int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);
   for(int i = 0; i < *nfrm; i ++)
-    if(! llsm_frame_checklayer0(src -> frames[i]))
+    if(! llsm_frame_checklayer0(src -> frames[i]) &&
+       ! llsm_frame_checklayer1(src -> frames[i]))
       return 0;
   return 1;
 }
@@ -333,8 +472,7 @@ static FP_TYPE* llsm_synthesize_noise_excitation(llsm_soptions* options,
     FP_TYPE fmin = c == 0 ? 0 : chanfreq[c - 1];
     FP_TYPE fmax = c == nchannel - 1 ? fs / 2.0 : chanfreq[c];
     if(fmin >= fs / 2.0) break;
-    FP_TYPE* x = llsm_generate_bandlimited_noise(ny, fmin / fs * 2.0,
-      fmax / fs * 2.0);
+    FP_TYPE* x = llsm_generate_bandlimited_noise(ny, fmin / fs, fmax / fs);
     FP_TYPE* env = llsm_synthesize_noise_envelope(options, src, c, f0, nfrm,
       thop, fs, ny);
     for(int i = 0; i < ny; i ++) {
@@ -387,7 +525,8 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     llsm_fft_to_psd(x_re, x_im, nfft, wsqr, psd);
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, fs / 2.0, warp_axis, npsd);
     for(int j = 0; j < npsd; j ++)
-      env[j] = pow(10.0, nm -> psd[j] / 20.0) / sqrt(env[j] + 1e-8);
+      env[j] = exp(nm -> psd[j] / 20.0 * 2.3025851)
+             / sqrt(env[j] * 44100 / fs + 1e-8);
 
     // filter
     FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,

@@ -35,6 +35,7 @@ libllsm2 is a rewrite of [libllsm](https://github.com/Sleepwalking/libllsm) with
 * New feature: synthesis can be done at a different sampling rate without changing the model.
 * New feature: fast and accurate speech analysis/synthesis based on Chirp-Z Transform.
 * New feature: real-time synthesis.
+* New feature: seamless on-the-fly switching between harmonic synthesis and pulse-by-pulse synthesis.
 
 Compiling
 ---
@@ -58,19 +59,27 @@ Documentation
 
 Run `doxygen doxyfile` to generate the API documentation. Examples of using libllsm2 are given in the tests.
 
+### Additional notes on Pulse-by-Pulse synthesis
+
+Since the Januray 2019 update libllsm2 supports Pulse-by-Pulse (PbP) synthesis (in addition to harmonic bank and CZT based methods) of the periodic component. In PbP mode, the glottal flow of each period is generated directly in frequency domain, filtered by the layer 1 vocal tract response, and transformed to time-domain via overlap-add IFFT. This is the same as [WORLD](https://github.com/mmorise/World) vocoder except for the glottal model part.
+
+It is easy to prove that PbP gives the same result as harmonic synthesis given stationary parameters (F0, spectral envelope and glottal parameters), and even in the case of time-varying parameters the difference is hardly perceptible. However, PbP and harmonic synthesis offer a trade-off between speed and degree of control. PbP runs a few times slower than harmonic synthesis but allows period-level parameter modification. One example usage of PbP is to convert normal speech into irregular speech (e.g. growl, see [`test-pbpeffects`](https://github.com/Sleepwalking/libllsm2/blob/master/test/test-pbpeffects.c)).
+
+libllsm2 supports PbP synthesis to the extent that you may switch between PbP mode and harmonic mode on-the-fly during realtime synthesis by attaching `LLSM_FRAME_PBPSYN` flag to frame containers. Period-level parameter modification is possible via `LLSM_FRAME_PBPEFF` and `llsm_pbpeffect` callback structure.
+
 Licensing
 ---
 
-libllsm is licensed under GPLv3.
+libllsm2 is licensed under GPLv3.
 
 I have a pending patent on LLSM-related technologies. Under the terms of GPLv3, the patent license is granted to libllsm2 users, free from royalty.
 
-Please contact me (k.hua.kanru [at] ieee [dot] org) for an alternatively licensed version for commercial purposes.
+Commerical version is available upon request (k.hua.kanru [at] ieee [dot] org).
 
 Publications
 ---
 
-Currently there's no publication directly associated with LLSM. However there is [a poster](http://khua5.web.engr.illinois.edu/writings/hua-spcc-poster.pdf) on the pseudo glottal inverse filtering method in layer 1 LLSM.
+Currently there's no publication directly associated with LLSM. However there is [a poster](https://github.com/Sleepwalking/prometheus-spark/blob/master/writings/pseudo-glottal-inverse-filter-hua-2016.pdf) on the pseudo glottal inverse filtering method in layer 1 LLSM.
 
 K. Hua, "Speech Analysis/Synthesis by Non-parametric Separation of Vocal Source and Tract Responses," presented at Speech Processing Courses in Crete, 2016.
 
@@ -84,3 +93,11 @@ The following are the major publications that LLSM draws inspiration from.
 
 4. I. Saratxaga, Hernáez I., D. Erro, E. Navas, and Sánchez J., "Simple representation of signal phase for harmonic speech models," Electronics Letters, vol. 45, no. 7, p. 381, 2009.
 
+5. J. Bonada. "High quality voice transformations based on modeling radiated voice pulses in frequency domain," in Proceedings of Digital Audio Effects (DAFx), Vol. 3, 2004.
+
+Test Sounds
+---
+
+`test/are-you-ready.wav` - https://freesound.org/people/unfa/sounds/258342/
+
+`test/arctic_a0001.wav` - http://festvox.org/cmu_arctic/

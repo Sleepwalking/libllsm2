@@ -133,10 +133,6 @@ static inline void verify_spectral_distribution(FP_TYPE* x, int nx,
 
   FP_TYPE* X_flat = flatten(X, x_nfrm, nfft / 2 + 1, sizeof(FP_TYPE));
   FP_TYPE* Y_flat = flatten(Y, y_nfrm, nfft / 2 + 1, sizeof(FP_TYPE));
-  for(int i = 0; i < x_nfrm * (nfft / 2 + 1); i ++)
-    X_flat[i] = sqrt(X_flat[i]);
-  for(int i = 0; i < y_nfrm * (nfft / 2 + 1); i ++)
-    Y_flat[i] = sqrt(Y_flat[i]);
   
   FP_TYPE cc = spectral_correlation(X, Y, min_nfrm, nfft / 2 + 1);
   printf("\tCorrelation coefficient between the original spectrum "
