@@ -224,6 +224,7 @@ static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
     nm -> psd[j] = 10.0 / 2.30258 * log_2(nm -> psd[j]);
 
   if(nhar > 0 && use_layer1) {
+    llsm_container_remove(ret, LLSM_FRAME_HM);
     lfmodel gfm = lfmodel_from_rd(rd, 1.0 / f0, 1.0);
     FP_TYPE* lfmagnresp = lfmodel_spectrum(gfm, c -> faxis, ns, NULL);
     FP_TYPE* lfmagnf0 = lfmodel_spectrum(gfm, & f0, 1, NULL);

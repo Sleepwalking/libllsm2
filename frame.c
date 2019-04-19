@@ -93,7 +93,7 @@ void llsm_copy_nmframe_inplace(llsm_nmframe* dst, llsm_nmframe* src) {
     dst -> psd = realloc(dst -> psd, sizeof(FP_TYPE) * src -> npsd);
   memcpy(dst -> psd, src -> psd, sizeof(FP_TYPE) * src -> npsd);
   dst -> npsd = src -> npsd;
-  
+
   if(dst -> nchannel < src -> nchannel) {
     dst -> edc = realloc(dst -> edc, sizeof(FP_TYPE) * src -> nchannel);
     dst -> eenv = realloc(dst -> eenv,
@@ -219,11 +219,11 @@ int llsm_frame_checklayer0(llsm_container* src) {
 int llsm_frame_checklayer1(llsm_container* src) {
   FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
   FP_TYPE* rd = llsm_container_get(src, LLSM_FRAME_RD);
+  llsm_nmframe* nm = llsm_container_get(src, LLSM_FRAME_NM);
+  if(f0 == NULL || rd == NULL || nm == NULL) return 0;
   FP_TYPE* spec_env = llsm_container_get(src, LLSM_FRAME_VTMAGN);
   FP_TYPE* vs_phse = llsm_container_get(src, LLSM_FRAME_VSPHSE);
-  llsm_nmframe* nm = llsm_container_get(src, LLSM_FRAME_NM);
-  if(f0 == NULL || rd == NULL || spec_env == NULL || vs_phse == NULL ||
-     nm == NULL) return 0;
+  if(f0[0] > 0 && (spec_env == NULL || vs_phse == NULL)) return 0;
   return 1;
 }
 

@@ -27,7 +27,7 @@ static int llsm_layer0to1_check_integrity(llsm_chunk* src) {
   FP_TYPE* thop = llsm_container_get(src -> conf, LLSM_CONF_THOP);
   FP_TYPE* fnyq = llsm_container_get(src -> conf, LLSM_CONF_FNYQ);
   FP_TYPE* liprad = llsm_container_get(src -> conf, LLSM_CONF_LIPRADIUS);
-  if(nfrm == NULL || thop == NULL || fnyq == NULL || liprad == NULL) 
+  if(nfrm == NULL || thop == NULL || fnyq == NULL || liprad == NULL)
     return 0;
   for(int i = 0; i < *nfrm; i ++)
     if(! llsm_frame_checklayer0(src -> frames[i]))
@@ -36,12 +36,10 @@ static int llsm_layer0to1_check_integrity(llsm_chunk* src) {
 }
 
 static int llsm_layer1to0_check_integrity(llsm_container* conf) {
-  int* nfrm = llsm_container_get(conf, LLSM_CONF_NFRM);
   FP_TYPE* fnyq = llsm_container_get(conf, LLSM_CONF_FNYQ);
   FP_TYPE* liprad = llsm_container_get(conf, LLSM_CONF_LIPRADIUS);
   int* nspec = llsm_container_get(conf, LLSM_CONF_NSPEC);
-  if(nfrm == NULL || fnyq == NULL || liprad == NULL || nspec == NULL)
-    return 0;
+  if(fnyq == NULL || liprad == NULL || nspec == NULL) return 0;
   return 1;
 }
 
@@ -50,7 +48,7 @@ static FP_TYPE* llsm_analyze_rd(llsm_chunk* src) {
   FP_TYPE thop = *((FP_TYPE*)llsm_container_get(src -> conf, LLSM_CONF_THOP));
   FP_TYPE lip_radius = *((FP_TYPE*)llsm_container_get(src -> conf,
     LLSM_CONF_LIPRADIUS));
-  
+
   int ncandidate = 64;
   FP_TYPE* rd_list = linspace(0.02, 3.0, ncandidate);
   llsm_cached_glottal_model* cgm = llsm_create_cached_glottal_model(
@@ -112,7 +110,7 @@ static void llsm_frame_tolayer1(llsm_container* dst, FP_TYPE lip_radius,
   // The spectral envelope after removing lip and glottal responses.
   FP_TYPE* spec_env = llsm_harmonic_envelope(ampl, hm -> nhar,
     f0 / fnyq / 2.0, nfft);
-  
+
   FP_TYPE* arr_vs_phse = llsm_create_fparray(hm -> nhar);
   FP_TYPE* arr_spec_env = llsm_create_fparray(nspec);
   memcpy(arr_spec_env, spec_env, nspec * sizeof(FP_TYPE));
@@ -121,7 +119,7 @@ static void llsm_frame_tolayer1(llsm_container* dst, FP_TYPE lip_radius,
     llsm_delete_fparray, llsm_copy_fparray);
   llsm_container_attach(dst, LLSM_FRAME_VSPHSE, arr_vs_phse,
     llsm_delete_fparray, llsm_copy_fparray);
-  
+
   free(ampl); free(phse); free(freq);
   free(vt_phse); free(vs_ampl); free(vs_phse); free(spec_env);
 }
@@ -178,7 +176,7 @@ void llsm_frame_tolayer0(llsm_container* dst, llsm_container* conf) {
   for(int i = 0; i < nhar; i ++)
     vt_ampl[i] = exp(vt_ampl[i] / 20.0 * 2.3025851); // db2mag
   FP_TYPE* vt_phse = llsm_harmonic_minphase(vt_ampl, nhar);
-  
+
   llsm_hmframe* hm = llsm_create_hmframe(nhar);
   for(int i = 0; i < nhar; i ++) {
     hm -> ampl[i] = vt_ampl[i] * vs_ampl[i];
