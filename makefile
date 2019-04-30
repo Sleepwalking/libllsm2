@@ -78,6 +78,11 @@ $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$* test/test-$*.c \
 	  $(TARGET_A) $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O) -lm
 
+$(OUT_DIR)/demo-%: test/demo-%.c $(TARGET_A) \
+	  $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O)
+	$(CC) $(CFLAGS) -o $(OUT_DIR)/demo-$* test/demo-$*.c \
+	  $(TARGET_A) $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O) -lm
+
 $(TARGET_A): $(OBJS)
 	$(AR) $(ARFLAGS) $(TARGET_A) $(OBJS)
 
