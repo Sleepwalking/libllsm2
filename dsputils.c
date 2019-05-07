@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
+#include "constants.h"
 #include "external/ciglet/ciglet.h"
 
 #include "filter-coef.h"
@@ -279,7 +280,6 @@ FP_TYPE* llsm_spectral_mean(FP_TYPE* spectrum, int nspec, FP_TYPE fnyq,
   for(int i = 0; i < nfreq; i ++) {
     FP_TYPE fprev = i == 0 ? 0 : freq[i - 1];
     FP_TYPE fnext = i == nfreq - 1 ? freq[i] * 2 - freq[i - 1] : freq[i + 1];
-    FP_TYPE fcenter = freq[i];
     int idxl = fprev / fnyq * nspec;
     int idxh = fnext / fnyq * nspec + 1;
     idxl = max(0, idxl); idxl = min(nspec - 1, idxl);
@@ -471,8 +471,7 @@ FP_TYPE* llsm_harmonic_envelope(FP_TYPE* ampl, int nhar, FP_TYPE f0,
   FP_TYPE* full_spectrum = cig_spec2env(X, nfft, f0, nhar, NULL);
   free(X);
   for(int i = 0; i < nfft / 2 + 1; i ++) {
-    full_spectrum[i] = decompress_logspectrum(full_spectrum[i]) + peak;
-    full_spectrum[i] *= 20.0 / 2.3025851; // log2db
+    full_spectrum[i] = LOG2DB(decompress_logspectrum(full_spectrum[i]) + peak);
   }
   free(compressed_ampl);
   return full_spectrum;

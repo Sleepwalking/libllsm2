@@ -20,6 +20,7 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 #include "external/ciglet/ciglet.h"
 
 llsm_aoptions* llsm_create_aoptions() {
@@ -359,7 +360,7 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x,
   FP_TYPE* Q = calloc(nfrm, sizeof(FP_TYPE)); // process variance
   FP_TYPE* R = calloc(nfrm, sizeof(FP_TYPE)); // observation variance
   FP_TYPE* P = calloc(nfrm, sizeof(FP_TYPE)); // forward posterior
-  for(int i = 0; i < nfrm; i ++) R[i] = 1.6449; // log chi-squared (2) variance
+  for(int i = 0; i < nfrm; i ++) R[i] = LOGCHI2VAR;
   for(int j = 0; j < nspec; j ++) {
     // moving statistics -> process variance
     for(int i = 0; i < nfrm; i ++) {
@@ -377,7 +378,7 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x,
     FP_TYPE* s = kalmans1d(y, P, Q, nfrm);
     for(int i = 0; i < nfrm; i ++) {
       spgm_res[i][j] = spgm_psd[j][i] - s[i];
-      spgm_psd[j][i] = s[i] + 0.577216; // bias removal
+      spgm_psd[j][i] = s[i] + EULERGAMMA; // bias removal
     }
     free(y); free(s);
   }
@@ -396,7 +397,7 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x,
     // The PSD is squared and hence 10 * log10(.)
     // -120 dB noise floor for underflow protection.
     for(int j = 0; j < options -> npsd; j ++) {
-      resvec[j] = dst_res[j] * 10.0 / 2.3025851;
+      resvec[j] = LOG2IN(dst_res[j]);
       dst_psd[j] = exp(dst_psd[j]);
       dst_nm -> psd[j] = 10.0 * log10(dst_psd[j] * 44100 / fs + 1e-12);
     }
@@ -594,11 +595,11 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     for(int j = 0; j < npsd; j ++) src_psd[j] = nm -> psd[j];
     if(resvec != NULL)
     for(int j = 0; j < npsd; j ++)
-      src_psd[j] += resvec[j] - 0.375 * 10.0 / 2.3025851;
+      src_psd[j] += resvec[j] - LOG2IN(LOGRESBIAS);
     FP_TYPE* H = llsm_spectrum_from_envelope(
       src_axis, src_psd, npsd, nspec - 1, fs / 2.0);
     for(int j = 0; j < nspec; j ++)
-      H[j] = exp(H[j] / 20.0 * 2.3025851) / sqrt(env[j] * 44100 / fs + 1e-8);
+      H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / fs + 1e-8);
 
     // filter
     for(int j = 0; j < nspec - 1; j ++) {

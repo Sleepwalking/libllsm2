@@ -99,7 +99,7 @@ $(CIGLET_O): $(CIGLET_SRC)
 	mkdir -p $(OUT_DIR)
 	$(CC) $(CFLAGS_REL) -o $(CIGLET_O) -c $(CIGLET_SRC)
 
-$(OUT_DIR)/%.o: %.c
+$(OUT_DIR)/%.o: %.c constants.h
 	mkdir -p $(OUT_DIR)
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/$*.o -c $*.c
 

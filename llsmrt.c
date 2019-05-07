@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #include "buffer.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 #include "external/ciglet/ciglet.h"
 
 typedef struct {
@@ -448,8 +449,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     FP_TYPE* H = llsm_spectrum_from_envelope(
       psd_axis, nm -> psd, npsd, nspec - 1, dst -> fs / 2.0);
     for(int j = 0; j < nspec; j ++)
-      H[j] = exp(H[j] / 20.0 * 2.3025851)
-           / sqrt(env[j] * 44100 / dst -> fs + 1e-8);
+      H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / dst -> fs + 1e-8);
 
     // filter
     for(int i = 0; i < nspec - 1; i ++) {
@@ -509,7 +509,7 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* ptr,
   FP_TYPE* resvec = llsm_container_get(frame, LLSM_FRAME_PSDRES);
   if(resvec != NULL)
   for(int j = 0; j < dst -> prev_nm -> npsd; j ++)
-    dst -> prev_nm -> psd[j] += resvec[j] - 0.375 * 10.0 / 2.3025851;
+    dst -> prev_nm -> psd[j] += resvec[j] - LOG2IN(LOGRESBIAS);
 }
 
 int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* ptr, FP_TYPE* dst) {

@@ -19,6 +19,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
+#include "constants.h"
 #include "external/ciglet/ciglet.h"
 
 // Ooura-fft
@@ -95,7 +96,7 @@ FP_TYPE* llsm_coder_encode(llsm_coder* c_, llsm_container* src) {
     c -> faxis, ns);
   // from intensity to power
   for(int j = 0; j < ns; j ++)
-    spec_psd[j] = exp_2(spec_psd[j] * 2.30258 / 10.0);
+    spec_psd[j] = exp_2(IN2LOG(spec_psd[j]));
 
   if(f0[0] > 0) {
     FP_TYPE* rd = llsm_container_get(src, LLSM_FRAME_RD);
@@ -107,7 +108,7 @@ FP_TYPE* llsm_coder_encode(llsm_coder* c_, llsm_container* src) {
     FP_TYPE* lfmagnf0 = lfmodel_spectrum(gfm, f0, 1, NULL);
     FP_TYPE* spec_env = calloc(ns, sizeof(FP_TYPE));
     for(int j = 1; j < ns; j ++) {
-      spec_env[j] = exp_2(vtmagn[j] * 2.30258 / 20.0)
+      spec_env[j] = exp_2(DB2LOG(vtmagn[j]))
         * lfmagnresp[j] / lfmagnf0[0] * f0[0] / c -> faxis[j];
     }
     spec_env[0] = spec_env[1];
@@ -220,7 +221,7 @@ static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
   free(nm -> psd);
   nm -> psd = interp1(c -> faxis, full_noise, ns, c -> psdaxis, nm -> npsd);
   for(int j = 0; j < nm -> npsd; j ++)
-    nm -> psd[j] = 10.0 / 2.30258 * log_2(nm -> psd[j]);
+    nm -> psd[j] = LOG2IN(log_2(nm -> psd[j]));
 
   if(nhar > 0 && use_layer1) {
     llsm_container_remove(ret, LLSM_FRAME_HM);
@@ -230,8 +231,8 @@ static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
     llsm_lipfilter(c -> liprad, c -> fnyq / ns, ns, full_spec, NULL, 1);
     // magnitude to log
     for(int j = 1; j < ns; j ++)
-      full_spec[j] = 20.0 / 2.30258 * log_2(full_spec[j]
-        * c -> faxis[j] / f0 * lfmagnf0[0] / lfmagnresp[j]);
+      full_spec[j] = LOG2DB(log_2(full_spec[j]
+        * c -> faxis[j] / f0 * lfmagnf0[0] / lfmagnresp[j]));
     full_spec[0] = full_spec[1];
     FP_TYPE* vtmagn = llsm_create_fparray(ns);
     FP_TYPE* vsphse = llsm_create_fparray(nhar);

@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -20,6 +20,7 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 #include "external/ciglet/ciglet.h"
 
 static int llsm_layer0to1_check_integrity(llsm_chunk* src) {
@@ -174,7 +175,7 @@ void llsm_frame_tolayer0(llsm_container* dst, llsm_container* conf) {
   FP_TYPE* faxis = linspace(0, fnyq, nspec);
   FP_TYPE* vt_ampl = interp1(faxis, spec_env, nspec, freq, nhar);
   for(int i = 0; i < nhar; i ++)
-    vt_ampl[i] = exp(vt_ampl[i] / 20.0 * 2.3025851); // db2mag
+    vt_ampl[i] = exp(DB2LOG(vt_ampl[i]));
   FP_TYPE* vt_phse = llsm_harmonic_minphase(vt_ampl, nhar);
 
   llsm_hmframe* hm = llsm_create_hmframe(nhar);
