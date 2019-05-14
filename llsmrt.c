@@ -115,7 +115,7 @@ static void llsm_update_cycle(llsm_rtsynth_buffer_* dst) {
     dst -> pbp_offset -= prev_nhop;
   int nwin = dst -> curr_nhop * 2;
   free(dst -> win); dst -> win = hanning_2(nwin);
-  
+
   dst -> next_nhop = floor((dst -> cycle + dst -> thop) * dst -> fs);
 
   for(int c = 0; c < dst -> nchannel; c ++)
@@ -286,7 +286,7 @@ static void llsm_rtsynth_buffer_feed_sinusoids(llsm_rtsynth_buffer_* dst,
   }
 }
 
-// Synthesize deterministic component (semi-harmonic excitation and 
+// Synthesize deterministic component (semi-harmonic excitation and
 //   noise envelope components).
 static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   llsm_container* frame) {
@@ -329,10 +329,10 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
   if(num_periods > 0)
     len_period = (pulse_projected - dst -> pulse) / num_periods;
   int pulse_size = pow(2, ceil(log2(max(len_period * 2, nspec))));
-  
+
   FP_TYPE* fnyq = llsm_container_get(dst -> conf, LLSM_CONF_FNYQ);
   FP_TYPE* liprad = llsm_container_get(dst -> conf, LLSM_CONF_LIPRADIUS);
-  
+
   int pbp_onset = 0;
   int pbp_termination = 0;
   if(pbp_on && ! dst -> pbp_state) {
@@ -348,7 +348,7 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
     dst -> pbp_state = 0;
     num_periods += ceil((-dst -> pbp_offset) / len_period);
   }
-  
+
   // Pulse OLA
   if(dst -> pbp_state || pbp_termination) {
     int period_begin = pbp_onset ? -2 : 0;
@@ -386,7 +386,7 @@ static void llsm_rtsynth_buffer_feed_deterministic(llsm_rtsynth_buffer_* dst,
     llsm_rtsynth_buffer_feed_sinusoids(dst, frame);
   }
   dst -> pulse = pulse_projected;
-  
+
   if(dst -> pbp_state &&
      dst -> pbp_offset <= dst -> sin_pos + nhop) {
     FP_TYPE* x = calloc(nhop * 2, sizeof(FP_TYPE));
@@ -436,6 +436,9 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
 
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
+    FP_TYPE peak = maxfp(nm -> psd, npsd);
+    if(peak < -100) return; // -100 dB noise floor
+
     // STFT
     llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -nhop * 2,
       nwin, x_re + nfft / 2 - nhop);

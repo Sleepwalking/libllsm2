@@ -152,7 +152,7 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     return llsm_synthesize_harmonics_l0(
       options, chunk, f0, nfrm, thop, fs, ny);
   }
-  
+
   const int maxnhar = 2048;
   FP_TYPE* y_hm  = calloc(ny, sizeof(FP_TYPE)); // harmonic model
   FP_TYPE* y_pbp = calloc(ny, sizeof(FP_TYPE)); // pulse-by-pulse synthesis
@@ -161,14 +161,14 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
   FP_TYPE* w = hanning(nwin);
   FP_TYPE* fnyq = llsm_container_get(chunk -> conf, LLSM_CONF_FNYQ);
   FP_TYPE* liprad = llsm_container_get(chunk -> conf, LLSM_CONF_LIPRADIUS);
-  
+
   FP_TYPE pulse_previous = 0; // aligned to zero-time phase of glottal flow
   int pbp_periods = 0;
   int pbp_periods_thrd = 3;
   FP_TYPE pbp_switch_rate = 0;
   FP_TYPE pbp_switch_state = 0;
   int baseidx_prev = 0;
-  
+
   for(int i = 0; i < nfrm; i ++) {
     if(f0[i] == 0) continue; // skip unvoiced frames
     int baseidx = i * thop * fs;
@@ -200,7 +200,7 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
     int num_periods = round((pulse_projected - pulse_previous) / len_period);
     len_period = (pulse_projected - pulse_previous) / num_periods;
     int pulse_size = pow(2, ceil(log2(max(len_period * 2, nspec))));
-    
+
     // pulse-by-pulse synthesis
     if(pbp_on || pbp_periods > 0) {
       if(num_periods > 0) {
@@ -258,9 +258,9 @@ static FP_TYPE* llsm_synthesize_harmonics(llsm_soptions* options,
         y_mix[j] = pbp_switch_state;
     }
     baseidx_prev = baseidx;
-    
+
     if(pbp_on && pbp_periods == pbp_periods_thrd && (! require_hm)) continue;
-    
+
     // harmonic model synthesis
     if(llsm_container_get(src_frame, LLSM_FRAME_HM) == NULL)
       llsm_frame_tolayer0(src_frame, chunk -> conf);
@@ -347,7 +347,7 @@ static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x_res,
 static void llsm_analyze_noise_envelope(llsm_aoptions* options,
   FP_TYPE* x, FP_TYPE* x_res, int nx, FP_TYPE fs, FP_TYPE* f0,
   int nfrm, llsm_chunk* dst_chunk) {
-  
+
   int*      tmp_nhar = calloc(nfrm, sizeof(int));
   FP_TYPE** tmp_ampl = calloc(nfrm, sizeof(FP_TYPE*));
   FP_TYPE** tmp_phse = calloc(nfrm, sizeof(FP_TYPE*));
@@ -512,6 +512,8 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
   // STFT -> PSD -> warp -> diff -> filter -> ISTFT
   for(int i = 0; i < nfrm; i ++) {
     llsm_nmframe* nm = llsm_container_get(src -> frames[i], LLSM_FRAME_NM);
+    FP_TYPE peak = maxfp(nm -> psd, npsd);
+    if(peak < -100) continue; // -100 dB noise floor
 
     // STFT
     int center = round(i * thop * fs);
@@ -520,7 +522,7 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     for(int j = 0; j < nfft; j ++) x_re[j] = 0;
     for(int j = 0; j < nwin; j ++) x_re[j - nwin / 2 + nfft / 2] = xfrm[j];
     fft(x_re, NULL, x_re, x_im, nfft, fftbuffer + nfft * 2);
-    
+
     // PSD -> warp -> diff
     llsm_fft_to_psd(x_re, x_im, nfft, wsqr, psd);
     FP_TYPE* env = llsm_spectral_mean(psd, nspec, fs / 2.0, warp_axis, npsd);
@@ -552,7 +554,7 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     free(H); free(env);
     free(xfrm);
   }
-  
+
   free(fftbuffer); free(psd);
   free(warp_axis);
   free(w);
