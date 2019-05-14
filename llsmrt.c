@@ -436,6 +436,9 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
 
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
+    FP_TYPE peak = maxfp(nm -> psd, npsd);
+    if(peak < -100) return; // -100 dB noise floor
+
     // STFT
     llsm_ringbuffer_readchunk(dst -> buffer_exc_mix, -nhop * 2,
       nwin, x_re + nfft / 2 - nhop);

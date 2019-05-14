@@ -580,6 +580,8 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
   for(int i = 0; i < nfrm; i ++) {
     llsm_nmframe* nm = llsm_container_get(src -> frames[i], LLSM_FRAME_NM);
     FP_TYPE* resvec = llsm_container_get(src -> frames[i], LLSM_FRAME_PSDRES);
+    FP_TYPE peak = maxfp(nm -> psd, npsd);
+    if(peak < -100) continue; // -100 dB noise floor
 
     // STFT
     int center = round(i * thop * fs);
