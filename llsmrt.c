@@ -451,7 +451,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
     FP_TYPE* env = moving_avg(psd, nspec, 3);
     FP_TYPE* H = llsm_spectrum_from_envelope(
       psd_axis, nm -> psd, npsd, nspec - 1, dst -> fs / 2.0);
-    for(int j = 0; j < nspec; j ++)
+    for(int j = 0; j < nspec - 1; j ++)
       H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / dst -> fs + 1e-8);
 
     // filter
