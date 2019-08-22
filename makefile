@@ -14,24 +14,26 @@ OBJS = $(OUT_DIR)/container.o \
   $(OUT_DIR)/llsmrt.o
 TARGET_A = $(OUT_DIR)/libllsm.a
 
-CIGLET_DIR = ./external/ciglet
-CIGLET_SRC = $(CIGLET_DIR)/ciglet.c
-CIGLET_O   = $(OUT_DIR)/ciglet.o
-LIBCIGLET_A = # use it if building entire libciglet is more appropriate
-LIBGVPS_DIR = ./external/libgvps
-LIBGVPS_A = ./external/libgvps/build/libgvps.a
-LIBGVPS_INCLUDE = ./external/libgvps/
-LIBPYIN_DIR = ./external/libpyin
-LIBPYIN_A = ./external/libpyin/build/libpyin.a
-LIBPYIN_INCLUDE = ./external/libpyin/
-LIBNEBULA_DIR = ./external/libnebula
-LIBNEBULA_A = ./external/libnebula/build/libnebula.a
-LIBIHNM_DIR = ./external/libihnm
-LIBIHNM_A = ./external/libihnm/build/libihnm.a
+CIGLET_PREFIX = /usr
+GVPS_PREFIX = /usr
+PYIN_PREFIX = /usr
+NEBULA_PREFIX = /usr
+IHNM_PREFIX = /usr
+
+CIGLET_A = $(CIGLET_PREFIX)/lib/libciglet.a
+CIGLET_INCLUDE = $(CIGLET_PREFIX)/include/
+GVPS_A = $(GVPS_PREFIX)/lib/libgvps.a
+GVPS_INCLUDE = $(GVPS_PREFIX)/include/
+PYIN_A = $(PYIN_PREFIX)/lib/libpyin.a
+PYIN_INCLUDE = $(PYIN_PREFIX)/include/
+NEBULA_A = $(NEBULA_PREFIX)/lib/libnebula.a
+NEBULA_INCLUDE = $(NEBULA_PREFIX)/include
+IHNM_A = $(IHNM_PREFIX)/lib/libihnm.a
+IHNM_INCLUDE = $(IHNM_PREFIX)/include
 
 ARFLAGS = -rv
-CFLAGS_COMMON = -DFP_TYPE=float -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD \
-	-I$(LIBGVPS_INCLUDE) -I$(LIBPYIN_INCLUDE)
+CFLAGS_COMMON = -DFP_TYPE=float -std=c99 -Wall -fPIC -fopenmp -pthread -DUSE_PTHREAD \
+	-I$(CIGLET_INCLUDE) -I$(GVPS_INCLUDE) -I$(PYIN_INCLUDE) -I$(NEBULA_INCLUDE) -I$(IHNM_INCLUDE)
 CFLAGS_DBG = $(CFLAGS_COMMON) -Og -g
 CFLAGS_REL = $(CFLAGS_COMMON) -Ofast
 CFLAGS = $(CFLAGS_DBG)
@@ -84,14 +86,14 @@ test-pbpeffects: $(OUT_DIR)/test-pbpeffects
 $(OUT_DIR)/test-structs: buffer.h
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
-	  $(LIBPYIN_A) $(LIBGVPS_A) $(CIGLET_O) test/verify-utils.h
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$* test/test-$*.c \
-	  $(TARGET_A) $(LIBPYIN_A) $(LIBGVPS_A) $(LIBIHNM_A) $(CIGLET_O) $(LIBCIGLET_A) -lm
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
 
 $(OUT_DIR)/demo-%: test/demo-%.c $(TARGET_A) \
-	  $(LIBPYIN_A) $(LIBNEBULA_A) $(LIBGVPS_A) $(LIBIHNM_A) $(CIGLET_O)
+	  $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A)
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/demo-$* test/demo-$*.c -fopenmp \
-	  $(TARGET_A) $(LIBPYIN_A) $(LIBNEBULA_A) $(LIBGVPS_A) $(LIBIHNM_A) $(CIGLET_O) $(LIBCIGLET_A) -lm
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
 
 $(TARGET_A): $(OBJS)
 	$(AR) $(ARFLAGS) $(TARGET_A) $(OBJS)
@@ -104,10 +106,6 @@ $(OUT_DIR)/layer0.o: llsmutils.h dsputils.h llsm.h
 $(OUT_DIR)/layer1.o: llsmutils.h dsputils.h llsm.h
 $(OUT_DIR)/coder.o: dsputils.h llsm.h
 $(OUT_DIR)/llsmrt.o: buffer.h llsmutils.h dsputils.h llsm.h llsmrt.h
-
-$(CIGLET_O): $(CIGLET_SRC)
-	mkdir -p $(OUT_DIR)
-	$(CC) $(CFLAGS_REL) -o $(CIGLET_O) -c $(CIGLET_SRC)
 
 $(OUT_DIR)/%.o: %.c
 	mkdir -p $(OUT_DIR)
