@@ -19,7 +19,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
-#include "external/ciglet/ciglet.h"
+#include "ciglet.h"
 
 llsm_hmframe* llsm_create_hmframe(int nhar) {
   llsm_hmframe* ret = malloc(sizeof(llsm_hmframe));

@@ -1,6 +1,6 @@
 #include "../llsm.h"
-#include "../external/libpyin/pyin.h"
-#include "../external/ciglet/ciglet.h"
+#include "nebula.h"
+#include "ciglet.h"
 
 // circular interpolation of two radian values
 static FP_TYPE linterpc(FP_TYPE a, FP_TYPE b, FP_TYPE ratio) {

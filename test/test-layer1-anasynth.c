@@ -1,5 +1,5 @@
 #include "../llsm.h"
-#include "../external/libpyin/pyin.h"
+#include "pyin.h"
 #include "verify-utils.h"
 
 int main() {

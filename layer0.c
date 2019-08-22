@@ -20,7 +20,8 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
-#include "external/ciglet/ciglet.h"
+#include "ciglet.h"
+#include "ihnm.h"
 
 llsm_aoptions* llsm_create_aoptions() {
   llsm_aoptions* ret = malloc(sizeof(llsm_aoptions));

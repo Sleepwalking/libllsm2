@@ -20,7 +20,7 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
-#include "external/ciglet/ciglet.h"
+#include "ciglet.h"
 
 static int llsm_layer0to1_check_integrity(llsm_chunk* src) {
   int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);

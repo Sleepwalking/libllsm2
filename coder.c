@@ -19,7 +19,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
-#include "external/ciglet/ciglet.h"
+#include "ciglet.h"
 
 // Ooura-fft
 void ddct(int, int, FP_TYPE *);
