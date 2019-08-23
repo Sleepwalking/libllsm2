@@ -31,8 +31,14 @@ NEBULA_INCLUDE = $(NEBULA_PREFIX)/include
 IHNM_A = $(IHNM_PREFIX)/lib/libihnm.a
 IHNM_INCLUDE = $(IHNM_PREFIX)/include
 
+ifeq 'Darwin' '$(shell uname)'
+  CFLAGS_PLAT =
+else
+  CFLAGS_PLAT = -fopenmp
+endif
+
 ARFLAGS = -rv
-CFLAGS_COMMON = -DFP_TYPE=float -std=c99 -Wall -fPIC -fopenmp -pthread -DUSE_PTHREAD \
+CFLAGS_COMMON = -DFP_TYPE=float -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD $(CFLAGS_PLAT) \
 	-I$(CIGLET_INCLUDE) -I$(GVPS_INCLUDE) -I$(PYIN_INCLUDE) -I$(NEBULA_INCLUDE) -I$(IHNM_INCLUDE)
 CFLAGS_DBG = $(CFLAGS_COMMON) -Og -g
 CFLAGS_REL = $(CFLAGS_COMMON) -Ofast
@@ -92,7 +98,7 @@ $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 
 $(OUT_DIR)/demo-%: test/demo-%.c $(TARGET_A) \
 	  $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A)
-	$(CC) $(CFLAGS) -o $(OUT_DIR)/demo-$* test/demo-$*.c -fopenmp \
+	$(CC) $(CFLAGS) -o $(OUT_DIR)/demo-$* test/demo-$*.c $(CFLAGS_PLAT) \
 	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
 
 $(TARGET_A): $(OBJS)
