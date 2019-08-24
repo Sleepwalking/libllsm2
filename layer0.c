@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -23,19 +23,19 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 
 llsm_aoptions* llsm_create_aoptions() {
   llsm_aoptions* ret = malloc(sizeof(llsm_aoptions));
   ret -> thop = 0.005;
   ret -> maxnhar = 100;
   ret -> maxnhar_e = 4;
-  ret -> npsd = 64;
+  ret -> npsd = 256;
   ret -> nchannel = 4;
   ret -> chanfreq = calloc(3, sizeof(FP_TYPE));
   ret -> chanfreq[0] = 2000.0;
   ret -> chanfreq[1] = 4000.0;
   ret -> chanfreq[2] = 8000.0;
-  ret -> noise_warp = 15000.0;
   ret -> lip_radius = 1.5;
   ret -> f0_refine = 1;
   ret -> hm_method = LLSM_AOPTION_HMCZT;
@@ -61,8 +61,6 @@ llsm_container* llsm_aoptions_toconf(llsm_aoptions* src, FP_TYPE fnyq) {
     llsm_create_int(src -> maxnhar_e), llsm_delete_int, llsm_copy_int);
   llsm_container_attach(ret, LLSM_CONF_NPSD,
     llsm_create_int(src -> npsd), llsm_delete_int, llsm_copy_int);
-  llsm_container_attach(ret, LLSM_CONF_NOSWARP,
-    llsm_create_fp(src -> noise_warp), llsm_delete_fp, llsm_copy_fp);
   llsm_container_attach(ret, LLSM_CONF_FNYQ,
     llsm_create_fp(fnyq), llsm_delete_fp, llsm_copy_fp);
   llsm_container_attach(ret, LLSM_CONF_NCHANNEL,
@@ -318,32 +316,103 @@ static FP_TYPE* llsm_synthesize_noise_envelope(llsm_soptions* options,
   return y;
 }
 
-static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x_res,
-  int nx, FP_TYPE fs, int nfrm, llsm_chunk* dst_chunk) {
+static void llsm_analyze_noise_psd(llsm_aoptions* options, FP_TYPE* x,
+  FP_TYPE* x_res, int nx, FP_TYPE fs, int nfrm, llsm_chunk* dst_chunk) {
   int nwin = round(options -> thop * 4 * fs);
   int nfft = pow(2, ceil(log2(nwin)));
   int nspec = nfft / 2 + 1;
-  FP_TYPE* frame_psd = calloc(nspec, sizeof(FP_TYPE));
-  FP_TYPE* warp_axis = llsm_warp_frequency(0, fs / 2.0, options -> npsd,
-    options -> noise_warp);
 
-  // For each frame, compute PSD, frequency warp, and save into dst_chunk.
+  // compute spectral envelope (harmonic + noise power)
+  int nfft_spgm = pow(2, ceil(log2(0.03 * fs)));
+  FP_TYPE** spgm = malloc2d(nfrm, nfft_spgm / 2 + 1, sizeof(FP_TYPE));
+  int* center = calloc(nfrm, sizeof(int));
+  int* winsize_spgm = calloc(nfrm, sizeof(int));
   for(int i = 0; i < nfrm; i ++) {
-    llsm_nmframe* dst_nm = llsm_container_get(dst_chunk -> frames[i],
-      LLSM_FRAME_NM);
-    int center = round(i * options -> thop * fs);
-    FP_TYPE* xfrm = fetch_frame(x_res, nx, center, nwin);
-    llsm_estimate_psd(xfrm, nwin, nfft, frame_psd);
-    FP_TYPE* wpsd = llsm_spectral_mean(frame_psd, nspec - 1, fs / 2.0,
-      warp_axis, options -> npsd);
+    FP_TYPE* f0 = llsm_container_get(dst_chunk -> frames[i], LLSM_FRAME_F0);
+    winsize_spgm[i] = f0 == NULL || f0[0] == 0 ? nwin : fs / f0[0] * 3;
+    center[i] = round(i * options -> thop * fs);
+  }
+  llsm_compute_spectrogram(x, nx, center, winsize_spgm, nfrm, nfft_spgm,
+    "hanning", spgm, NULL);
+  for(int i = 0; i < nfrm; i ++) {
+    FP_TYPE* f0 = llsm_container_get(dst_chunk -> frames[i], LLSM_FRAME_F0);
+    FP_TYPE f0_scaled = (f0 == NULL || f0[0] == 0 ? 200 : f0[0]) / fs;
+    FP_TYPE* env = spec2env(spgm[i], nfft_spgm, f0_scaled, NULL);
+    for(int j = 0; j < nspec; j ++) {
+      int idx = j * nfft_spgm / nfft;
+      spgm[i][j] = env[idx] * 2; // magnitude to power (log)
+    }
+    free(env);
+  }
+  free(winsize_spgm);
+
+  // transposed PSD spectrogram
+  FP_TYPE** spgm_psd = malloc2d(nspec, nfrm, sizeof(FP_TYPE));
+  // PSD residual vectors
+  FP_TYPE** spgm_res = malloc2d(nfrm, nspec, sizeof(FP_TYPE));
+  // compute noise PSD
+  FP_TYPE* psdvec = calloc(nspec, sizeof(FP_TYPE));
+  for(int i = 0; i < nfrm; i ++) {
+    FP_TYPE* xfrm = fetch_frame(x_res, nx, center[i], nwin);
+    llsm_estimate_psd(xfrm, nwin, nfft, psdvec);
+    for(int j = 0; j < nspec; j ++)
+      spgm_psd[j][i] = log(max(1e-10, psdvec[j]));
+    free(xfrm);
+  }
+  FP_TYPE* Q = calloc(nfrm, sizeof(FP_TYPE)); // process variance
+  FP_TYPE* R = calloc(nfrm, sizeof(FP_TYPE)); // observation variance
+  FP_TYPE* P = calloc(nfrm, sizeof(FP_TYPE)); // forward posterior
+  for(int i = 0; i < nfrm; i ++) R[i] = LOGCHI2VAR;
+  for(int j = 0; j < nspec; j ++) {
+    // moving statistics -> process variance
+    for(int i = 0; i < nfrm; i ++) {
+      FP_TYPE m1 = 0;
+      FP_TYPE m2 = 0;
+      for(int k = -1; k <= 1; k ++) {
+        int idx = min(nfrm - 1, max(0, i + k));
+        m1 += spgm[idx][j];
+        m2 += spgm[idx][j] * spgm[idx][j];
+      }
+      Q[i] = max(1e-8, m2 / 3 - m1 * m1 / 9);
+    }
+    // smoothen PSD along time and extract the residual
+    FP_TYPE* y = kalmanf1d(spgm_psd[j], Q, R, nfrm, P, NULL);
+    FP_TYPE* s = kalmans1d(y, P, Q, nfrm);
+    for(int i = 0; i < nfrm; i ++) {
+      spgm_res[i][j] = spgm_psd[j][i] - s[i];
+      spgm_psd[j][i] = s[i] + EULERGAMMA; // bias removal
+    }
+    free(y); free(s);
+  }
+  free(P); free(Q); free(R);
+
+  FP_TYPE* dst_axis = linspace(0, fs / 2.0, options -> npsd);
+  for(int i = 0; i < nfrm; i ++) {
+    llsm_nmframe* dst_nm = llsm_container_get(
+      dst_chunk -> frames[i], LLSM_FRAME_NM);
+    for(int j = 0; j < nspec; j ++) psdvec[j] = spgm_psd[j][i];
+    FP_TYPE* dst_psd = interp1u(
+      0, fs / 2.0, psdvec, nspec, dst_axis, options -> npsd);
+    FP_TYPE* dst_res = interp1u(
+      0, fs / 2.0, spgm_res[i], nspec, dst_axis, options -> npsd);
+    FP_TYPE* resvec = llsm_create_fparray(options -> npsd);
     // The PSD is squared and hence 10 * log10(.)
     // -120 dB noise floor for underflow protection.
-    for(int j = 0; j < options -> npsd; j ++)
-      dst_nm -> psd[j] = 10.0 * log10(wpsd[j] * 44100 / fs + 1e-12);
-    free(xfrm); free(wpsd);
+    for(int j = 0; j < options -> npsd; j ++) {
+      resvec[j] = LOG2IN(dst_res[j]);
+      dst_psd[j] = exp(dst_psd[j]);
+      dst_nm -> psd[j] = 10.0 * log10(dst_psd[j] * 44100 / fs + 1e-12);
+    }
+    llsm_container_attach(dst_chunk -> frames[i], LLSM_FRAME_PSDRES,
+      resvec, llsm_delete_fparray, llsm_copy_fparray);
+    free(dst_psd); free(dst_res);
   }
-  free(warp_axis);
-  free(frame_psd);
+  free(dst_axis);
+  free2d(spgm_psd, nspec);
+  free2d(spgm_res, nfrm);
+  free2d(spgm, nfrm);
+  free(center);
+  free(psdvec);
 }
 
 static void llsm_analyze_noise_envelope(llsm_aoptions* options,
@@ -403,7 +472,7 @@ static void llsm_analyze_noise_envelope(llsm_aoptions* options,
 static void llsm_analyze_noise(llsm_aoptions* options, FP_TYPE* x,
   FP_TYPE* x_res, int nx, FP_TYPE fs, FP_TYPE* f0, int nfrm,
   llsm_chunk* dst_chunk) {
-  llsm_analyze_noise_psd(options, x_res, nx, fs, nfrm, dst_chunk);
+  llsm_analyze_noise_psd(options, x, x_res, nx, fs, nfrm, dst_chunk);
   llsm_analyze_noise_envelope(options, x, x_res, nx, fs, f0, nfrm, dst_chunk);
 }
 
@@ -446,11 +515,10 @@ int llsm_conf_checklayer0(llsm_container* src) {
   int* nfrm = llsm_container_get(src, LLSM_CONF_NFRM);
   FP_TYPE* thop = llsm_container_get(src, LLSM_CONF_THOP);
   int* npsd = llsm_container_get(src, LLSM_CONF_NPSD);
-  FP_TYPE* noswarp = llsm_container_get(src, LLSM_CONF_NOSWARP);
   FP_TYPE* fnyq = llsm_container_get(src, LLSM_CONF_FNYQ);
   int* nchannel = llsm_container_get(src, LLSM_CONF_NCHANNEL);
   FP_TYPE* chanfreq = llsm_container_get(src, LLSM_CONF_CHANFREQ);
-  if(nfrm == NULL || thop == NULL || npsd == NULL || noswarp == NULL ||
+  if(nfrm == NULL || thop == NULL || npsd == NULL ||
      fnyq == NULL || nchannel == NULL || chanfreq == NULL) return 0;
   return 1;
 }
@@ -506,14 +574,14 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
 
   int npsd = *((int*)llsm_container_get(src -> conf, LLSM_CONF_NPSD));
   FP_TYPE fnyq = *((FP_TYPE*)llsm_container_get(src -> conf, LLSM_CONF_FNYQ));
-  FP_TYPE noswarp = *((FP_TYPE*)llsm_container_get(src -> conf,
-    LLSM_CONF_NOSWARP));
-  FP_TYPE* warp_axis = llsm_warp_frequency(0, fnyq, npsd, noswarp);
 
   FP_TYPE* y = calloc(nx, sizeof(FP_TYPE));
-  // STFT -> PSD -> warp -> diff -> filter -> ISTFT
+  FP_TYPE* src_axis = linspace(0, fnyq, npsd);
+  FP_TYPE* src_psd = calloc(npsd, sizeof(FP_TYPE));
+  // STFT -> PSD -> diff -> filter -> ISTFT
   for(int i = 0; i < nfrm; i ++) {
     llsm_nmframe* nm = llsm_container_get(src -> frames[i], LLSM_FRAME_NM);
+    FP_TYPE* resvec = llsm_container_get(src -> frames[i], LLSM_FRAME_PSDRES);
     FP_TYPE peak = maxfp(nm -> psd, npsd);
     if(peak < -100) continue; // -100 dB noise floor
 
@@ -525,16 +593,19 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
     for(int j = 0; j < nwin; j ++) x_re[j - nwin / 2 + nfft / 2] = xfrm[j];
     fft(x_re, NULL, x_re, x_im, nfft, fftbuffer + nfft * 2);
 
-    // PSD -> warp -> diff
+    // PSD -> diff
     llsm_fft_to_psd(x_re, x_im, nfft, wsqr, psd);
-    FP_TYPE* env = llsm_spectral_mean(psd, nspec, fs / 2.0, warp_axis, npsd);
+    FP_TYPE* env = moving_avg(psd, nspec, 3);
+    for(int j = 0; j < npsd; j ++) src_psd[j] = nm -> psd[j];
+    if(resvec != NULL)
     for(int j = 0; j < npsd; j ++)
-      env[j] = exp(nm -> psd[j] / 20.0 * 2.3025851)
-             / sqrt(env[j] * 44100 / fs + 1e-8);
+      src_psd[j] += resvec[j] - LOG2IN(LOGRESBIAS);
+    FP_TYPE* H = llsm_spectrum_from_envelope(
+      src_axis, src_psd, npsd, nspec - 1, fs / 2.0);
+    for(int j = 0; j < nspec; j ++)
+      H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / fs + 1e-8);
 
     // filter
-    FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,
-      fs / 2.0);
     for(int j = 0; j < nspec - 1; j ++) {
       x_re[j] *= H[j]; x_im[j] *= H[j];
     }
@@ -558,7 +629,7 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
   }
 
   free(fftbuffer); free(psd);
-  free(warp_axis);
+  free(src_axis); free(src_psd);
   free(w);
   return y;
 }

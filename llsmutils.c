@@ -1,8 +1,8 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
 
+  Copyright (c) 2017-2019 Kanru Hua.
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
@@ -20,6 +20,7 @@
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 
 llsm_gfm llsm_lfmodel_to_gfm(lfmodel src) {
   llsm_gfm ret;
@@ -78,11 +79,11 @@ static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
     phse_har[i] -= 0.5 * M_PI;
     phse_har[i] = wrap(vsphse[i - 1] - phse_har[i] - vsshift * i);
   }
-  
+
   // add VT phase to the phase delta vector
   for(int i = 0; i < nhar; i ++)
     phse_har[i + 1] += vt_harphse[i];
-  
+
   // Now the harmonic phase delta will be expanded into a full-sized phase
   //   envelope. Phase interpolation is error-prone but in this context
   //   systematic errors won't matter thanks to the error-cancelling effect
@@ -103,7 +104,7 @@ static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
   free(phse_har);
   free(phse_re); free(phse_im);
   free(phse_delta_re);
-  
+
   // From this point we will move from harmonic reprensentations to full-sized
   //   spectra. A spectrum generated from LF model is first integrated (to
   //   become glottal flow velocity); then various phase corrections are
@@ -124,7 +125,7 @@ static void make_filtered_pulse_spectrum(llsm_container* src, lfmodel source,
   }
   free(lfmagnf0);
   free(phse_delta);
-  
+
   free(lfmagnresp); free(lfphseresp);
 }
 
@@ -138,13 +139,13 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
   int halfsize = size / 2 + 1;
   for(int i = 0; i < halfsize; i ++)
     freq_axis[i] = i * fs / size;
-  
+
   FP_TYPE* vtmagn = llsm_container_get(src, LLSM_FRAME_VTMAGN);
   FP_TYPE* vsphse = llsm_container_get(src, LLSM_FRAME_VSPHSE);
   FP_TYPE* f0 = llsm_container_get(src, LLSM_FRAME_F0);
   int nspec = llsm_fparray_length(vtmagn);
   int nhar = llsm_fparray_length(vsphse);
-  
+
   // To keep PbP synthesis consistent with HM, we need to compute vocal tract
   //   phase directly from its harmonic representation, albeit at a cost of
   //   slightly breaking minimum phase property (w.r.t full-sized spectra).
@@ -153,39 +154,37 @@ FP_TYPE* llsm_make_filtered_pulse(llsm_container* src, lfmodel* sources,
   for(int i = 0; i <= nhar; i ++) freq_har[i] = i * f0[0];
   FP_TYPE* vtamplhar = interp1(vtaxis, vtmagn, nspec, freq_har + 1, nhar);
   for(int i = 0; i < nhar; i ++)
-    vtamplhar[i] = exp(vtamplhar[i] / 20.0 * 2.3025851); // db2mag
+    vtamplhar[i] = exp(DB2LOG(vtamplhar[i]));
   FP_TYPE* vt_phse = llsm_harmonic_minphase(vtamplhar, nhar);
   free(freq_har);
   free(vtamplhar);
-  
+
   for(int i = 0; i < num_pulses; i ++) {
     make_filtered_pulse_spectrum(src, sources[i], -offsets[i] - pre_rotate,
       size, fnyq, lip_radius, fs, vt_phse, nhar, freq_axis,
       real_resp, imag_resp);
   }
   free(vt_phse);
-  
+
   // Apply the lip radiation filter.
   llsm_lipfilter_reim(lip_radius, fs / size, halfsize,
     real_resp, imag_resp, 0);
-  
+
   // Apply the vocal tract magnitude filter (whose phase part has already been
   //   addressed in make_filter_pulse_spectrum).
   FP_TYPE* vtmagn_scaled = interp1(vtaxis, vtmagn, nspec, freq_axis, halfsize);
-  for(int i = 0; i < halfsize; i ++)
-    vtmagn_scaled[i] *= 2.3025851 / 20.0; // db2log
   for(int i = 0; i < halfsize; i ++) {
-    FP_TYPE gain = exp_2(vtmagn_scaled[i]);
+    FP_TYPE gain = exp_2(DB2LOG(vtmagn_scaled[i]));
     real_resp[i] *= gain;
     imag_resp[i] *= gain;
   }
   free(vtaxis); free(vtmagn_scaled);
-  
+
   // Recover the negative part using real-dft symmetry and inverse transform.
   complete_symm (real_resp, size);
   complete_asymm(imag_resp, size);
   ifft(real_resp, imag_resp, real_resp, NULL, size, buffer);
-  
+
   // Some tricks to reduce glitches at boundaries.
   int fadein = min(256, pre_rotate);
   int fadeout = min(256, size);

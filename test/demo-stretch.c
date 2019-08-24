@@ -17,7 +17,7 @@ static void interp_nmframe(llsm_nmframe* dst, llsm_nmframe* src,
   FP_TYPE ratio, int dst_voiced, int src_voiced) {
   for(int i = 0; i < dst -> npsd; i ++)
     dst -> psd[i] = linterp(dst -> psd[i], src -> psd[i], ratio);
-  
+
   for(int b = 0; b < dst -> nchannel; b ++) {
     llsm_hmframe* srceenv = src -> eenv[b];
     llsm_hmframe* dsteenv = dst -> eenv[b];
@@ -71,7 +71,7 @@ static void interp_llsm_frame(llsm_container* dst, llsm_container* src,
   int srcnhar = src_vsphse == NULL ? 0 : llsm_fparray_length(src_vsphse);
   int maxnhar = max(dstnhar, srcnhar);
   int minnhar = min(dstnhar, srcnhar);
-  
+
   if(! bothvoiced && voiced == src) {
     llsm_container_attach(dst, LLSM_FRAME_F0, llsm_create_fp(src_f0),
       llsm_delete_fp, llsm_copy_fp);
@@ -143,37 +143,52 @@ int main() {
   param.bias = 2;
   param.nf = ceil(fs * 0.025);
   FP_TYPE* f0 = pyin_analyze(param, x, nx, fs, & nfrm);
-  
+
   llsm_aoptions* opt_a = llsm_create_aoptions();
   opt_a -> thop = (FP_TYPE)nhop / fs;
+  opt_a -> hm_method = LLSM_AOPTION_HMCZT;
   llsm_soptions* opt_s = llsm_create_soptions(fs);
   llsm_chunk* chunk = llsm_analyze(opt_a, x, nx, fs, f0, nfrm, NULL);
+
+  llsm_output* out0 = llsm_synthesize(opt_s, chunk);
+  wavwrite(out0 -> y, out0 -> ny, opt_s -> fs, 24, "test/demo-stretch-orig.wav");
+  wavwrite(out0 -> y_sin, out0 -> ny, opt_s -> fs, 24, "test/demo-stretch-orig-sin.wav");
+  wavwrite(out0 -> y_noise, out0 -> ny, opt_s -> fs, 24, "test/demo-stretch-orig-noise.wav");
+  llsm_delete_output(out0);
+
   llsm_chunk_tolayer1(chunk, 2048);
   llsm_chunk_phasepropagate(chunk, -1);
-  
+
   int nfrm_new = nfrm * 2;
   llsm_container* conf_new = llsm_copy_container(chunk -> conf);
   llsm_container_attach(conf_new, LLSM_CONF_NFRM,
     llsm_create_int(nfrm_new), llsm_delete_int, llsm_copy_int);
   llsm_chunk* chunk_new = llsm_create_chunk(conf_new, 0);
   llsm_delete_container(conf_new);
-  
+
   for(int i = 0; i < nfrm_new; i ++) {
     FP_TYPE mapped = (FP_TYPE)i * nfrm / nfrm_new;
     int base = mapped;
     FP_TYPE ratio = mapped - base;
+    int residx = base + rand() % 5 - 2;
+    residx = max(0, min(nfrm - 1, residx));
     base = min(base, nfrm - 2);
     chunk_new -> frames[i] = llsm_copy_container(chunk -> frames[base]);
     interp_llsm_frame(
       chunk_new -> frames[i], chunk -> frames[base + 1], ratio);
+    FP_TYPE* resvec = llsm_container_get(chunk -> frames[residx],
+      LLSM_FRAME_PSDRES);
+    llsm_container_attach(chunk_new -> frames[i], LLSM_FRAME_PSDRES,
+      llsm_copy_fparray(resvec), llsm_delete_fparray, llsm_copy_fparray);
   }
   llsm_chunk_tolayer0(chunk_new);
   llsm_chunk_phasepropagate(chunk_new, 1);
-  
+
   llsm_output* out = llsm_synthesize(opt_s, chunk_new);
   wavwrite(out -> y, out -> ny, opt_s -> fs, 24, "test/demo-stretch.wav");
+  wavwrite(out -> y_noise, out -> ny, opt_s -> fs, 24, "test/demo-stretch-noise.wav");
   llsm_delete_output(out);
-  
+
   llsm_delete_chunk(chunk);
   llsm_delete_chunk(chunk_new);
   llsm_delete_aoptions(opt_a);
@@ -182,4 +197,3 @@ int main() {
   free(x);
   return 0;
 }
-

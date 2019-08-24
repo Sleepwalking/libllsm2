@@ -93,6 +93,7 @@ void llsm_container_remove(llsm_container* dst, int index);
 #define LLSM_FRAME_F0        0  /**< fundamental frequency (FP_TYPE) */
 #define LLSM_FRAME_HM        1  /**< harmonic model (llsm_hmframe) */
 #define LLSM_FRAME_NM        2  /**< noise model (llsm_nmframe) */
+#define LLSM_FRAME_PSDRES    3  /**< residual PSD */
 #define LLSM_FRAME_PBPEFF    8  /**< Pulse-by-Pulse synthesis effect.
                                      (llsm_pbpeffect) */
 #define LLSM_FRAME_PBPSYN    9  /**< use Pulse-by-Pulse synthesis (int) */
@@ -112,7 +113,7 @@ void llsm_container_remove(llsm_container* dst, int index);
 #define LLSM_CONF_MAXNHAR_E  3  /**< maximum number of harmonics for noise
                                      envelope (int) */
 #define LLSM_CONF_NPSD       4  /**< size of noise PSD vector (int) */
-#define LLSM_CONF_NOSWARP    5  /**< noise PSD warping constant (FP_TYPE) */
+#define LLSM_CONF_NOSWARP    5  /**< DEPRECATED */
 #define LLSM_CONF_FNYQ       6  /**< Nyquist frequency (FP_TYPE, Hz) */
 #define LLSM_CONF_NCHANNEL   7  /**< number of noise channels (int) */
 #define LLSM_CONF_CHANFREQ   8  /**< frequencies of noise channels
@@ -258,7 +259,6 @@ typedef struct {
   int npsd;            /**< size of the PSD vector */
   int nchannel;        /**< number of channels for noise modeling */
   FP_TYPE* chanfreq;   /**< channel frequencies for noise modeling */
-  FP_TYPE noise_warp;  /**< spectral warping factor for noise modeling */
   FP_TYPE lip_radius;  /**< default lip radius (cm) */
 
   int f0_refine;       /**< flag for enabling F0 refminement */

@@ -21,6 +21,7 @@
 
 #include "llsm.h"
 #include "dsputils.h"
+#include "constants.h"
 
 // Ooura-fft
 void ddct(int, int, FP_TYPE *);
@@ -34,7 +35,7 @@ typedef struct {
   int npsd;
   FP_TYPE fnyq;
   FP_TYPE liprad;
-  FP_TYPE* freqwarp;
+  FP_TYPE* psdaxis;
   FP_TYPE* melaxis;
   FP_TYPE* faxis;
   FP_TYPE* apaxis;
@@ -48,7 +49,6 @@ llsm_coder* llsm_create_coder(llsm_container* conf, int order_spec,
   int* nhar_e = llsm_container_get(conf, LLSM_CONF_MAXNHAR_E);
   int* npsd = llsm_container_get(conf, LLSM_CONF_NPSD);
   int* nspec = llsm_container_get(conf, LLSM_CONF_NSPEC);
-  FP_TYPE* noswarp = llsm_container_get(conf, LLSM_CONF_NOSWARP);
   FP_TYPE* liprad = llsm_container_get(conf, LLSM_CONF_LIPRADIUS);
   ret -> order_spec = order_spec;
   ret -> order_bap = order_bap;
@@ -61,7 +61,7 @@ llsm_coder* llsm_create_coder(llsm_container* conf, int order_spec,
   ret -> faxis = calloc(ret -> nfullspec, sizeof(FP_TYPE));
   for(int i = 0; i < ret -> nfullspec; i ++)
     ret -> faxis[i] = fnyq[0] * 2 * i / ret -> nfullspec;
-  ret -> freqwarp = llsm_warp_frequency(0, ret -> fnyq, ret -> npsd, *noswarp);
+  ret -> psdaxis = linspace(0, ret -> fnyq, ret -> npsd);
   FP_TYPE mel_ceil = freq2mel(ret -> fnyq);
   FP_TYPE mel_floor = freq2mel(50);
   ret -> melaxis = calloc(nspec[0], sizeof(FP_TYPE));
@@ -75,7 +75,7 @@ llsm_coder* llsm_create_coder(llsm_container* conf, int order_spec,
 void llsm_delete_coder(llsm_coder* dst_) {
   llsm_coder_* dst = (llsm_coder_*)dst_;
   if(dst == NULL) return;
-  free(dst -> freqwarp);
+  free(dst -> psdaxis);
   free(dst -> melaxis);
   free(dst -> faxis);
   free(dst -> apaxis);
@@ -92,12 +92,12 @@ FP_TYPE* llsm_coder_encode(llsm_coder* c_, llsm_container* src) {
   enc[0] = f0[0] > 0; // voicing
   enc[1] = f0[0];     // f0
 
-  // from warpped frequency axis to full linear frequency axis
-  FP_TYPE* spec_psd = interp1(c -> freqwarp, nm -> psd, nm -> npsd,
+  // from scaled frequency axis to full frequency axis
+  FP_TYPE* spec_psd = interp1(c -> psdaxis, nm -> psd, nm -> npsd,
     c -> faxis, ns);
   // from intensity to power
   for(int j = 0; j < ns; j ++)
-    spec_psd[j] = exp_2(spec_psd[j] * 2.30258 / 10.0);
+    spec_psd[j] = exp_2(IN2LOG(spec_psd[j]));
 
   if(f0[0] > 0) {
     FP_TYPE* rd = llsm_container_get(src, LLSM_FRAME_RD);
@@ -109,7 +109,7 @@ FP_TYPE* llsm_coder_encode(llsm_coder* c_, llsm_container* src) {
     FP_TYPE* lfmagnf0 = lfmodel_spectrum(gfm, f0, 1, NULL);
     FP_TYPE* spec_env = calloc(ns, sizeof(FP_TYPE));
     for(int j = 1; j < ns; j ++) {
-      spec_env[j] = exp_2(vtmagn[j] * 2.30258 / 20.0)
+      spec_env[j] = exp_2(DB2LOG(vtmagn[j]))
         * lfmagnresp[j] / lfmagnf0[0] * f0[0] / c -> faxis[j];
     }
     spec_env[0] = spec_env[1];
@@ -220,9 +220,9 @@ static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
 
   // power to log intensity
   free(nm -> psd);
-  nm -> psd = interp1(c -> faxis, full_noise, ns, c -> freqwarp, nm -> npsd);
+  nm -> psd = interp1(c -> faxis, full_noise, ns, c -> psdaxis, nm -> npsd);
   for(int j = 0; j < nm -> npsd; j ++)
-    nm -> psd[j] = 10.0 / 2.30258 * log_2(nm -> psd[j]);
+    nm -> psd[j] = LOG2IN(log_2(nm -> psd[j]));
 
   if(nhar > 0 && use_layer1) {
     llsm_container_remove(ret, LLSM_FRAME_HM);
@@ -232,8 +232,8 @@ static llsm_container* llsm_coder_decode(llsm_coder* c_, FP_TYPE* src,
     llsm_lipfilter(c -> liprad, c -> fnyq / ns, ns, full_spec, NULL, 1);
     // magnitude to log
     for(int j = 1; j < ns; j ++)
-      full_spec[j] = 20.0 / 2.30258 * log_2(full_spec[j]
-        * c -> faxis[j] / f0 * lfmagnf0[0] / lfmagnresp[j]);
+      full_spec[j] = LOG2DB(log_2(full_spec[j]
+        * c -> faxis[j] / f0 * lfmagnf0[0] / lfmagnresp[j]));
     full_spec[0] = full_spec[1];
     FP_TYPE* vtmagn = llsm_create_fparray(ns);
     FP_TYPE* vsphse = llsm_create_fparray(nhar);

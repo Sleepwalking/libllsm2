@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017-2018 Kanru Hua.
+  Copyright (c) 2017-2019 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 #include "buffer.h"
 #include "dsputils.h"
 #include "llsmutils.h"
+#include "constants.h"
 
 typedef struct {
   int nout;      // number of output samples left in buffer_out
@@ -67,7 +68,7 @@ typedef struct {
   FP_TYPE* buffer_rawexc; // size: ninternal
   FP_TYPE* buffer_rawmod; // size: ninternal
   FP_TYPE* buffer_phase;  // size: nfft
-  FP_TYPE* warp_axis;  // size: nspec
+  FP_TYPE* psd_axis;  // size: npsd
 
 # ifdef USE_PTHREAD
   pthread_mutex_t buffer_out_mtx;
@@ -195,13 +196,12 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
 
   int npsd = *((int*)llsm_container_get(conf, LLSM_CONF_NPSD));
   FP_TYPE fnyq = *((FP_TYPE*)llsm_container_get(conf, LLSM_CONF_FNYQ));
-  FP_TYPE noswarp = *((FP_TYPE*)llsm_container_get(conf, LLSM_CONF_NOSWARP));
   ret -> buffer_psd = calloc(ret -> nfft / 2 + 1, sizeof(FP_TYPE));
   ret -> buffer_fft = calloc(ret -> nfft * 4, sizeof(FP_TYPE));
   ret -> buffer_rawexc = calloc(ret -> ninternal, sizeof(FP_TYPE));
   ret -> buffer_rawmod = calloc(ret -> ninternal, sizeof(FP_TYPE));
   ret -> buffer_phase  = calloc(ret -> nfft, sizeof(FP_TYPE));
-  ret -> warp_axis = llsm_warp_frequency(0, fnyq, npsd, noswarp);
+  ret -> psd_axis = linspace(0, fnyq, npsd);
 
 # ifdef USE_PTHREAD
   pthread_mutex_init(& ret -> buffer_out_mtx, NULL);
@@ -240,7 +240,7 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   free(dst -> buffer_rawexc);
   free(dst -> buffer_rawmod);
   free(dst -> buffer_phase);
-  free(dst -> warp_axis);
+  free(dst -> psd_axis);
 # ifdef USE_PTHREAD
   pthread_mutex_destroy(& dst -> buffer_out_mtx);
   pthread_cond_destroy(& dst -> buffer_out_cv);
@@ -433,7 +433,7 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
   memset(fftbuffer, 0, nfft * 4 * sizeof(FP_TYPE));
 
   int npsd = *((int*)llsm_container_get(dst -> conf, LLSM_CONF_NPSD));
-  FP_TYPE* warp_axis = dst -> warp_axis;
+  FP_TYPE* psd_axis = dst -> psd_axis;
 
   llsm_nmframe* nm = dst -> prev_nm;
   if(nm != NULL) {
@@ -447,17 +447,15 @@ static void llsm_rtsynth_buffer_feed_filter(llsm_rtsynth_buffer_* dst) {
       x_re[i - nhop + nfft / 2] *= dst -> win[i];
     fft(x_re, NULL, x_re, x_im, nfft, fftbuffer + nfft * 2);
 
-    // PSD -> warp -> diff
+    // PSD -> diff
     llsm_fft_to_psd(x_re, x_im, nfft, wsqr, psd);
-    FP_TYPE* env = llsm_spectral_mean(psd, nspec, dst -> fs / 2.0,
-      warp_axis, npsd);
-    for(int i = 0; i < npsd; i ++)
-      env[i] = exp_2(nm -> psd[i] / 20.0 * 2.3025851)
-             / sqrt(env[i] * 44100 / dst -> fs + 1e-8);
+    FP_TYPE* env = moving_avg(psd, nspec, 3);
+    FP_TYPE* H = llsm_spectrum_from_envelope(
+      psd_axis, nm -> psd, npsd, nspec - 1, dst -> fs / 2.0);
+    for(int j = 0; j < nspec - 1; j ++)
+      H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / dst -> fs + 1e-8);
 
     // filter
-    FP_TYPE* H = llsm_spectrum_from_envelope(warp_axis, env, npsd, nspec - 1,
-      dst -> fs / 2.0);
     for(int i = 0; i < nspec - 1; i ++) {
       x_re[i] *= H[i]; x_im[i] *= H[i];
     }
@@ -512,6 +510,10 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* ptr,
   dst -> prev_nm = llsm_container_get(frame, LLSM_FRAME_NM);
   if(dst -> prev_nm != NULL)
     dst -> prev_nm = llsm_copy_nmframe(dst -> prev_nm);
+  FP_TYPE* resvec = llsm_container_get(frame, LLSM_FRAME_PSDRES);
+  if(resvec != NULL)
+  for(int j = 0; j < dst -> prev_nm -> npsd; j ++)
+    dst -> prev_nm -> psd[j] += resvec[j] - LOG2IN(LOGRESBIAS);
 }
 
 int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* ptr, FP_TYPE* dst) {

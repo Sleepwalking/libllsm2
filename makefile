@@ -113,7 +113,7 @@ $(OUT_DIR)/layer1.o: llsmutils.h dsputils.h llsm.h
 $(OUT_DIR)/coder.o: dsputils.h llsm.h
 $(OUT_DIR)/llsmrt.o: buffer.h llsmutils.h dsputils.h llsm.h llsmrt.h
 
-$(OUT_DIR)/%.o: %.c
+$(OUT_DIR)/%.o: %.c constants.h
 	mkdir -p $(OUT_DIR)
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/$*.o -c $*.c
 
