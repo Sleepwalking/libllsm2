@@ -23,8 +23,9 @@
 #ifndef LLSM_UTILS_H
 #define LLSM_UTILS_H
 
+#include <ciglet/ciglet.h>
+
 #include "llsm.h"
-#include "ciglet.h"
 
 /** @brief Convert LF model parameters into Fa, Rk, Rg format. */
 llsm_gfm llsm_lfmodel_to_gfm(lfmodel src);

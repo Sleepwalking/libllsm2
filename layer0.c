@@ -17,11 +17,12 @@
   along with libllsm. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ciglet/ciglet.h>
+#include <libihnm/ihnm.h>
+
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
-#include "ciglet.h"
-#include "ihnm.h"
 
 llsm_aoptions* llsm_create_aoptions() {
   llsm_aoptions* ret = malloc(sizeof(llsm_aoptions));

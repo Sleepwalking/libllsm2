@@ -12,7 +12,7 @@ OBJS = $(OUT_DIR)/container.o \
   $(OUT_DIR)/layer1.o \
   $(OUT_DIR)/coder.o \
   $(OUT_DIR)/llsmrt.o
-TARGET_A = $(OUT_DIR)/libllsm.a
+TARGET_A = $(OUT_DIR)/libllsm2.a
 
 CIGLET_PREFIX = /usr
 GVPS_PREFIX = /usr
@@ -117,10 +117,10 @@ $(OUT_DIR)/%.o: %.c
 	mkdir -p $(OUT_DIR)
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/$*.o -c $*.c
 
-install: $(OUT_DIR)/libllsm.a 
-	mkdir -p $(PREFIX)/lib $(PREFIX)/include
-	cp $(OUT_DIR)/libllsm.a $(PREFIX)/lib
-	cp llsm.h llsmrt.h llsmutils.h $(PREFIX)/include
+install: $(OUT_DIR)/libllsm2.a 
+	mkdir -p $(PREFIX)/lib $(PREFIX)/include/libllsm2
+	cp $(OUT_DIR)/libllsm2.a $(PREFIX)/lib
+	cp llsm.h llsmrt.h llsmutils.h $(PREFIX)/include/libllsm2
 
 clean:
 	rm -f build/*

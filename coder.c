@@ -17,9 +17,10 @@
   along with libllsm. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ciglet/ciglet.h>
+
 #include "llsm.h"
 #include "dsputils.h"
-#include "ciglet.h"
 
 // Ooura-fft
 void ddct(int, int, FP_TYPE *);

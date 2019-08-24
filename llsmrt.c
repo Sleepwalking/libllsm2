@@ -21,11 +21,12 @@
 #include <pthread.h>
 #endif
 
+#include <ciglet/ciglet.h>
+
 #include "llsmrt.h"
 #include "buffer.h"
 #include "dsputils.h"
 #include "llsmutils.h"
-#include "ciglet.h"
 
 typedef struct {
   int nout;      // number of output samples left in buffer_out

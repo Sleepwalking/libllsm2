@@ -1,4 +1,4 @@
-#include "ciglet.h"
+#include <ciglet/ciglet.h>
 #include <assert.h>
 
 // F. Perez-Cruz, "Kullback-Leibler divergence estimation of continuous

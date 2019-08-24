@@ -1,7 +1,8 @@
 #define _DEFAULT_SOURCE
 
+#include <libpyin/pyin.h>
+
 #include "../llsmrt.h"
-#include "pyin.h"
 #include "verify-utils.h"
 
 #ifdef USE_PTHREAD

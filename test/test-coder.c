@@ -1,5 +1,6 @@
+#include <libpyin/pyin.h>
+
 #include "../llsm.h"
-#include "pyin.h"
 #include "verify-utils.h"
 
 int main() {

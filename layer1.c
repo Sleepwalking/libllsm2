@@ -17,10 +17,11 @@
   along with libllsm. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ciglet/ciglet.h>
+
 #include "llsm.h"
 #include "dsputils.h"
 #include "llsmutils.h"
-#include "ciglet.h"
 
 static int llsm_layer0to1_check_integrity(llsm_chunk* src) {
   int* nfrm = llsm_container_get(src -> conf, LLSM_CONF_NFRM);

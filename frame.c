@@ -17,9 +17,10 @@
   along with libllsm. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <ciglet/ciglet.h>
+
 #include "llsm.h"
 #include "dsputils.h"
-#include "ciglet.h"
 
 llsm_hmframe* llsm_create_hmframe(int nhar) {
   llsm_hmframe* ret = malloc(sizeof(llsm_hmframe));

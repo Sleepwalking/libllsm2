@@ -1,6 +1,7 @@
+#include <ciglet/ciglet.h>
+
 #include "../llsm.h"
 #include "../dsputils.h"
-#include "ciglet.h"
 #include "verify-utils.h"
 
 #define assert_equal(a, b) \
