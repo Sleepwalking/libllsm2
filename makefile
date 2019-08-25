@@ -120,7 +120,7 @@ $(OUT_DIR)/%.o: %.c constants.h
 install: $(OUT_DIR)/libllsm2.a 
 	mkdir -p $(PREFIX)/lib $(PREFIX)/include/libllsm2
 	cp $(OUT_DIR)/libllsm2.a $(PREFIX)/lib
-	cp llsm.h llsmrt.h llsmutils.h $(PREFIX)/include/libllsm2
+	cp llsm.h llsmrt.h llsmutils.h dsputils.h buffer.h $(PREFIX)/include/libllsm2
 
 clean:
 	rm -f build/*
