@@ -1,7 +1,6 @@
 PREFIX = /usr
-CC = gcc
-LINK = gcc
-AR = ar
+CC ?= gcc
+AR ?= ar
 
 OUT_DIR = ./build
 OBJS = $(OUT_DIR)/container.o \
@@ -20,8 +19,8 @@ PYIN_PREFIX = /usr
 NEBULA_PREFIX = /usr
 IHNM_PREFIX = /usr
 
-FP_TYPE = float
-CONFIG  = Debug
+FP_TYPE ?= float
+CONFIG  ?= Debug
 
 CIGLET_A = $(CIGLET_PREFIX)/lib/libciglet.a
 CIGLET_INCLUDE = $(CIGLET_PREFIX)/include/
@@ -34,17 +33,16 @@ NEBULA_INCLUDE = $(NEBULA_PREFIX)/include
 IHNM_A = $(IHNM_PREFIX)/lib/libihnm.a
 IHNM_INCLUDE = $(IHNM_PREFIX)/include
 
-ifeq 'Darwin' '$(shell uname)'
-  CFLAGS_PLAT =
-else
-  CFLAGS_PLAT = -fopenmp
-endif
-
 ARFLAGS = -rv
-CFLAGS_COMMON = -DFP_TYPE=$(FP_TYPE) -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD $(CFLAGS_PLAT) \
+CFLAGS_COMMON = -DFP_TYPE=$(FP_TYPE) -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD \
 	-I$(CIGLET_INCLUDE) -I$(GVPS_INCLUDE) -I$(PYIN_INCLUDE) -I$(NEBULA_INCLUDE) -I$(IHNM_INCLUDE)
-CFLAGS_DBG = $(CFLAGS_COMMON) -Og -g
-CFLAGS_REL = $(CFLAGS_COMMON) -Ofast
+ifeq ($(CXX), emcc)
+  CFLAGS_DBG = $(CFLAGS_COMMON) -O1 -g -D_DEBUG
+  CFLAGS_REL = $(CFLAGS_COMMON) -O3
+else
+  CFLAGS_DBG = $(CFLAGS_COMMON) -fopenmp -Og -g -D_DEBUG
+  CFLAGS_REL = $(CFLAGS_COMMON) -fopenmp -Ofast
+endif
 ifeq ($(CONFIG), Debug)
   CFLAGS = $(CFLAGS_DBG)
 else
@@ -53,55 +51,68 @@ endif
 
 default: $(TARGET_A)
 
-test: $(OUT_DIR)/test-structs \
-	  $(OUT_DIR)/test-dsputils \
-	  $(OUT_DIR)/test-harmonic \
-	  $(OUT_DIR)/test-layer0-anasynth \
-	  $(OUT_DIR)/test-layer0-edgecase \
-	  $(OUT_DIR)/test-layer1-anasynth \
-	  $(OUT_DIR)/test-llsmrt \
-	  $(OUT_DIR)/test-coder
-	$(OUT_DIR)/test-structs
-	$(OUT_DIR)/test-dsputils
-	$(OUT_DIR)/test-harmonic
-	$(OUT_DIR)/test-layer0-anasynth pp
-	$(OUT_DIR)/test-layer0-anasynth czt
-	$(OUT_DIR)/test-layer0-edgecase
-	$(OUT_DIR)/test-layer1-anasynth
-	$(OUT_DIR)/test-llsmrt
-	$(OUT_DIR)/test-coder
+test: test-dsputils test-layer0 test-layer1 \
+	test-coder test-llsmrt test-pbpeffects
 
-test-layer0: $(OUT_DIR)/test-layer0-anasynth \
-	  $(OUT_DIR)/test-layer0-edgecase
-	$(OUT_DIR)/test-layer0-anasynth pp
-	$(OUT_DIR)/test-layer0-anasynth czt
-	$(OUT_DIR)/test-layer0-edgecase
-
-test-layer1: $(OUT_DIR)/test-layer1-anasynth
-	$(OUT_DIR)/test-layer1-anasynth
-
-test-coder: $(OUT_DIR)/test-coder
-	$(OUT_DIR)/test-coder
-
+ifeq ($(CXX), emcc)
+test-dsputils: $(OUT_DIR)/test-structs.js \
+	  $(OUT_DIR)/test-dsputils.js \
+	  $(OUT_DIR)/test-harmonic.js
+	node --experimental-wasm-threads $(OUT_DIR)/test-structs.js
+	node --experimental-wasm-threads $(OUT_DIR)/test-dsputils.js
+	node --experimental-wasm-threads $(OUT_DIR)/test-harmonic.js
+test-layer0: $(OUT_DIR)/test-layer0-anasynth.html \
+	  $(OUT_DIR)/test-layer0-edgecase.html
+	emrun $(OUT_DIR)/test-layer0-anasynth.html pp
+	emrun $(OUT_DIR)/test-layer0-anasynth.html czt
+	emrun $(OUT_DIR)/test-layer0-edgecase.html
+test-layer1: $(OUT_DIR)/test-layer1-anasynth.html
+	emrun $(OUT_DIR)/test-layer1-anasynth.html
+test-coder: $(OUT_DIR)/test-coder.html
+	emrun $(OUT_DIR)/test-coder.html
+test-llsmrt: $(OUT_DIR)/test-llsmrt.html
+	emrun $(OUT_DIR)/test-llsmrt.html
+test-pbpeffects: $(OUT_DIR)/test-pbpeffects.html
+	emrun $(OUT_DIR)/test-pbpeffects.html
+else
 test-dsputils: $(OUT_DIR)/test-structs \
 	  $(OUT_DIR)/test-dsputils \
 	  $(OUT_DIR)/test-harmonic
 	$(OUT_DIR)/test-structs
 	$(OUT_DIR)/test-dsputils
 	$(OUT_DIR)/test-harmonic
-
+test-layer0: $(OUT_DIR)/test-layer0-anasynth \
+	  $(OUT_DIR)/test-layer0-edgecase
+	$(OUT_DIR)/test-layer0-anasynth pp
+	$(OUT_DIR)/test-layer0-anasynth czt
+	$(OUT_DIR)/test-layer0-edgecase
+test-layer1: $(OUT_DIR)/test-layer1-anasynth
+	$(OUT_DIR)/test-layer1-anasynth
+test-coder: $(OUT_DIR)/test-coder
+	$(OUT_DIR)/test-coder
 test-llsmrt: $(OUT_DIR)/test-llsmrt
 	$(OUT_DIR)/test-llsmrt
-
 test-pbpeffects: $(OUT_DIR)/test-pbpeffects
 	$(OUT_DIR)/test-pbpeffects
-
-$(OUT_DIR)/test-structs: buffer.h
+endif
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
 	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$* test/test-$*.c \
 	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
+
+$(OUT_DIR)/test-%.js: test/test-%.c $(TARGET_A) \
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
+	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$*.js test/test-$*.c \
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
+
+$(OUT_DIR)/test-%.html: test/test-%.c $(TARGET_A) \
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
+	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$*.html test/test-$*.c \
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm \
+	  --preload-file test/arctic_a0001.wav \
+	  --preload-file test/are-you-ready.wav --emrun \
+	  -s TOTAL_MEMORY=128MB -s PROXY_TO_PTHREAD
 
 $(OUT_DIR)/demo-%: test/demo-%.c $(TARGET_A) \
 	  $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A)
