@@ -164,6 +164,7 @@ void llsm_frame_tolayer0(llsm_container* dst, llsm_container* conf) {
   int nhar = llsm_fparray_length(vs_phse);
   int* maxnhar = llsm_container_get(conf, LLSM_CONF_MAXNHAR);
   if(maxnhar != NULL) nhar = min(nhar, *maxnhar);
+  nhar = min(nhar, (int)(fnyq / *f0));
 
   FP_TYPE* freq = calloc(nhar, sizeof(FP_TYPE));
   for(int i = 0; i < nhar; i ++) freq[i] = *f0 * (i + 1.0);
