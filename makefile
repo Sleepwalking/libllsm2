@@ -16,8 +16,6 @@ TARGET_A = $(OUT_DIR)/libllsm2.a
 CIGLET_PREFIX = /usr
 GVPS_PREFIX = /usr
 PYIN_PREFIX = /usr
-NEBULA_PREFIX = /usr
-IHNM_PREFIX = /usr
 
 FP_TYPE ?= float
 CONFIG  ?= Debug
@@ -28,14 +26,10 @@ GVPS_A = $(GVPS_PREFIX)/lib/libgvps.a
 GVPS_INCLUDE = $(GVPS_PREFIX)/include/
 PYIN_A = $(PYIN_PREFIX)/lib/libpyin.a
 PYIN_INCLUDE = $(PYIN_PREFIX)/include/
-NEBULA_A = $(NEBULA_PREFIX)/lib/libnebula.a
-NEBULA_INCLUDE = $(NEBULA_PREFIX)/include
-IHNM_A = $(IHNM_PREFIX)/lib/libihnm.a
-IHNM_INCLUDE = $(IHNM_PREFIX)/include
 
 ARFLAGS = -rv
 CFLAGS_COMMON = -DFP_TYPE=$(FP_TYPE) -std=c99 -Wall -fPIC -pthread -DUSE_PTHREAD \
-	-I$(CIGLET_INCLUDE) -I$(GVPS_INCLUDE) -I$(PYIN_INCLUDE) -I$(NEBULA_INCLUDE) -I$(IHNM_INCLUDE)
+	-I$(CIGLET_INCLUDE) -I$(GVPS_INCLUDE) -I$(PYIN_INCLUDE)
 ifeq ($(CXX), emcc)
   CFLAGS_DBG = $(CFLAGS_COMMON) -O1 -g -D_DEBUG
   CFLAGS_REL = $(CFLAGS_COMMON) -O3
@@ -97,27 +91,27 @@ test-pbpeffects: $(OUT_DIR)/test-pbpeffects
 endif
 
 $(OUT_DIR)/test-%: test/test-%.c $(TARGET_A) \
-	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) test/verify-utils.h
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$* test/test-$*.c \
-	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(GVPS_A) -lm
 
 $(OUT_DIR)/test-%.js: test/test-%.c $(TARGET_A) \
-	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) test/verify-utils.h
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$*.js test/test-$*.c \
-	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(GVPS_A) -lm
 
 $(OUT_DIR)/test-%.html: test/test-%.c $(TARGET_A) \
-	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) $(IHNM_A) test/verify-utils.h
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A) test/verify-utils.h
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/test-$*.html test/test-$*.c \
-	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm \
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(GVPS_A) -lm \
 	  --preload-file test/arctic_a0001.wav \
 	  --preload-file test/are-you-ready.wav --emrun \
 	  -s TOTAL_MEMORY=128MB -s PROXY_TO_PTHREAD
 
 $(OUT_DIR)/demo-%: test/demo-%.c $(TARGET_A) \
-	  $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A)
+	  $(CIGLET_A) $(PYIN_A) $(GVPS_A)
 	$(CC) $(CFLAGS) -o $(OUT_DIR)/demo-$* test/demo-$*.c $(CFLAGS_PLAT) \
-	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(NEBULA_A) $(GVPS_A) $(IHNM_A) -lm
+	  $(TARGET_A) $(CIGLET_A) $(PYIN_A) $(GVPS_A) -lm
 
 $(TARGET_A): $(OBJS)
 	$(AR) $(ARFLAGS) $(TARGET_A) $(OBJS)
