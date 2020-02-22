@@ -22,6 +22,11 @@
 #ifndef LLSM_H
 #define LLSM_H
 
+#define LLSM_VERSION_STRING   "2.1.0"
+#define LLSM_VERSION_MAJOR    2
+#define LLSM_VERSION_MINOR    1
+#define LLSM_VERSION_REVISION 0
+
 /** @brief Function pointer to destructors (e.g. llsm_delete_container). */
 typedef void (*llsm_fdestructor)(void*);
 
