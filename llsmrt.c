@@ -53,7 +53,8 @@ typedef struct {
   int pbp_state;  // on = 1, off = 0
   llsm_nmframe* prev_nm; // the previous noise model frame
 
-  llsm_ringbuffer*  buffer_out;       // output buffer of audio samples
+  llsm_ringbuffer*  buffer_out_p;     // output buffer for periodic signal
+  llsm_ringbuffer*  buffer_out_ap;    // output buffer for aperiodic signal
 
   FP_TYPE** exc_template_comps;       // noise template for each channel
   llsm_ringbuffer** buffer_mod_comps; // noise modulation buffer for each
@@ -182,7 +183,8 @@ llsm_rtsynth_buffer* llsm_create_rtsynth_buffer(llsm_soptions* options,
   ret -> pbp_state = 0;
   ret -> prev_nm = NULL;
 
-  ret -> buffer_out = llsm_create_ringbuffer(capacity_samples);
+  ret -> buffer_out_p  = llsm_create_ringbuffer(capacity_samples);
+  ret -> buffer_out_ap = llsm_create_ringbuffer(capacity_samples);
   ret -> buffer_exc_mix = llsm_create_ringbuffer(ret -> ninternal);
   ret -> buffer_noise = llsm_create_ringbuffer(ret -> ninternal);
   ret -> buffer_sin   = llsm_create_ringbuffer(ret -> ninternal);
@@ -224,7 +226,8 @@ void llsm_delete_rtsynth_buffer(llsm_rtsynth_buffer* dstptr) {
   if(dstptr == NULL) return;
   llsm_rtsynth_buffer_* dst = dstptr;
   llsm_delete_container(dst -> conf);
-  llsm_delete_ringbuffer(dst -> buffer_out);
+  llsm_delete_ringbuffer(dst -> buffer_out_p);
+  llsm_delete_ringbuffer(dst -> buffer_out_ap);
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
   llsm_delete_ringbuffer(dst -> buffer_sin);
@@ -481,14 +484,15 @@ static void llsm_rtsynth_buffer_feed_mix(llsm_rtsynth_buffer_* dst) {
     -dst -> nfft, dst -> next_nhop, x_nos);
   llsm_ringbuffer_readchunk(dst -> buffer_sin,
     dst -> sin_pos, dst -> next_nhop, x_sin);
-  for(int i = 0; i < dst -> next_nhop; i ++)
-    x_nos[i] += x_sin[i];
+  // for(int i = 0; i < dst -> next_nhop; i ++)
+  //   x_nos[i] += x_sin[i];
 # ifdef USE_PTHREAD
   pthread_mutex_lock(& dst -> buffer_out_mtx);
-  while(dst -> nout > dst -> buffer_out -> capacity - dst -> next_nhop)
+  while(dst -> nout > dst -> buffer_out_p -> capacity - dst -> next_nhop)
     pthread_cond_wait(& dst -> buffer_out_cv, & dst -> buffer_out_mtx);
 # endif
-  llsm_ringbuffer_appendchunk(dst -> buffer_out, dst -> next_nhop, x_nos);
+  llsm_ringbuffer_appendchunk(dst -> buffer_out_p, dst -> next_nhop, x_sin);
+  llsm_ringbuffer_appendchunk(dst -> buffer_out_ap, dst -> next_nhop, x_nos);
   dst -> nout += dst -> next_nhop;
 # ifdef USE_PTHREAD
   pthread_cond_broadcast(& dst -> buffer_out_cv);
@@ -522,18 +526,43 @@ int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* ptr, FP_TYPE* dst) {
   pthread_mutex_lock(& src -> buffer_out_mtx);
 # endif
   if(src -> nout > 0) {
-    *dst = llsm_ringbuffer_read(src -> buffer_out, -src -> nout);
+    *dst  = llsm_ringbuffer_read(src -> buffer_out_p, -src -> nout);
+    *dst += llsm_ringbuffer_read(src -> buffer_out_ap, -src -> nout);
     src -> nout --;
 #   ifdef USE_PTHREAD
     pthread_mutex_unlock(& src -> buffer_out_mtx);
     pthread_cond_broadcast(& src -> buffer_out_cv);
 #   endif
     return 1;
-  } else
+  } else {
 #   ifdef USE_PTHREAD
     pthread_mutex_unlock(& src -> buffer_out_mtx);
 #   endif
-    return 0;
+  }
+  return 0;
+}
+
+int llsm_rtsynth_buffer_fetch_decomposed(
+  llsm_rtsynth_buffer* ptr, FP_TYPE* dst_p, FP_TYPE* dst_ap) {
+  llsm_rtsynth_buffer_* src = ptr;
+# ifdef USE_PTHREAD
+  pthread_mutex_lock(& src -> buffer_out_mtx);
+# endif
+  if(src -> nout > 0) {
+    *dst_p  = llsm_ringbuffer_read(src -> buffer_out_p, -src -> nout);
+    *dst_ap = llsm_ringbuffer_read(src -> buffer_out_ap, -src -> nout);
+    src -> nout --;
+#   ifdef USE_PTHREAD
+    pthread_mutex_unlock(& src -> buffer_out_mtx);
+    pthread_cond_broadcast(& src -> buffer_out_cv);
+#   endif
+    return 1;
+  } else {
+#   ifdef USE_PTHREAD
+    pthread_mutex_unlock(& src -> buffer_out_mtx);
+#   endif
+  }
+  return 0;
 }
 
 int llsm_rtsynth_buffer_getlatency(llsm_rtsynth_buffer* ptr) {
@@ -548,14 +577,16 @@ int llsm_rtsynth_buffer_numoutput(llsm_rtsynth_buffer* ptr) {
 
 void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* ptr) {
   llsm_rtsynth_buffer_* dst = ptr;
-  int capacity_samples = dst -> buffer_out -> capacity;
+  int capacity_samples = dst -> buffer_out_p -> capacity;
   dst -> nout = 0;
-  llsm_delete_ringbuffer(dst -> buffer_out);
+  llsm_delete_ringbuffer(dst -> buffer_out_p);
+  llsm_delete_ringbuffer(dst -> buffer_out_ap);
   llsm_delete_ringbuffer(dst -> buffer_exc_mix);
   llsm_delete_ringbuffer(dst -> buffer_noise);
   llsm_delete_ringbuffer(dst -> buffer_sin);
   llsm_delete_dualbuffer(dst -> buffer_pulse);
-  dst -> buffer_out = llsm_create_ringbuffer(capacity_samples);
+  dst -> buffer_out_p  = llsm_create_ringbuffer(capacity_samples);
+  dst -> buffer_out_ap = llsm_create_ringbuffer(capacity_samples);
   dst -> buffer_exc_mix = llsm_create_ringbuffer(dst -> ninternal);
   dst -> buffer_noise = llsm_create_ringbuffer(dst -> ninternal);
   dst -> buffer_sin   = llsm_create_ringbuffer(dst -> ninternal);

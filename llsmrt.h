@@ -1,7 +1,7 @@
 /*
   libllsm2 - Low Level Speech Model (version 2)
   ===
-  Copyright (c) 2017 Kanru Hua.
+  Copyright (c) 2017-2020 Kanru Hua.
 
   libllsm2 is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -46,6 +46,10 @@ void llsm_rtsynth_buffer_feed(llsm_rtsynth_buffer* dst, llsm_container* frame);
 /** @brief Get one sample from the real-time synthesis buffer; returns 1 on
  *    success. */
 int llsm_rtsynth_buffer_fetch(llsm_rtsynth_buffer* src, FP_TYPE* dst);
+/** @brief Get one sample from the real-time synthesis buffer with separate
+ *    periodic/aperiodic outputs; returns 1 on success. */
+int llsm_rtsynth_buffer_fetch_decomposed(
+  llsm_rtsynth_buffer* src, FP_TYPE* dst_p, FP_TYPE* dst_ap);
 /** @brief Reset the real-time synthesis buffer. */
 void llsm_rtsynth_buffer_clear(llsm_rtsynth_buffer* dst);
 
