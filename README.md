@@ -1,22 +1,39 @@
 libllsm2
 ===
 
-Low Level Speech Model (version 2) for high-quality speech analysis/synthesis
+Low Level Speech Model (version 2.1) for high-quality speech analysis/synthesis
 
 About
 ---
 
 libllsm2 is a C library for analysis, modification and synthesis of digital speech signals. The original libllsm was designed in the context of concatenative synthesis, where a unified parametrization is desired for pitch shifting, concatenation and cross-fading of short segments of speech. Over the years, the project has evolved to accommodate various technical requirements from Synthesizer V and Dreamtonics' experimental projects. The current libllsm2 caters for both concatenative and statistical parametric synthesis.
 
-### Technical Specs
+### Should I use libllsm2 in my application?
 
-Upon the realization that speech signals can be understood at different levels of abstraction, I supplied the library with multiple analysis/synthesis routines and a flexible data structure. LLSM is a two-layer model of speech. The first layer (layer 0) is basically a harmonic + noise model (HNM); the second layer (layer 1) reinterprets the harmonic parameters in a source-filter setting. From a compositional point of view, layer 0 decomposes speech into periodic and aperiodic parts, and the periodic part is further decomposed into parts related to glottis and vocal tract in layer 1.
+libllsm2 will be useful if your application involves
+
+* Modification (e.g. pitch shifting, time stretching and adding other effects) of recorded voices.
+* Crossfading between (or joining together) two pieces of recorded speech without phase interferrence.
+* Synthesizing voice using a statistical model (e.g. DNN, HMM).
+* Real-time synthesis of (modified) speech.
+
+You can't use libllsm2 if your application involves real-time analysis of speech.
+
+### Long Introduction
+
+Speech signals can be understood at different levels of abstraction, from the physical level of articulator movements and propagation of airflow to the acoustic level of Fourier spectra.
+
+In the past, when we say "make the voice brighter", we actually meant turning up the high frequency knob in an equalizer. This is a pure acoustic understanding that is implementation-friendly, but it doesn't make direct sense to the singer. libllsm2 seeks to establish a link between these understandings so that modifications are more faithful to how voice is produced, and this link is crucial to high-quality pitch shifting.
+
+LLSM is a two-layer model of speech. The first layer (layer 0) is a harmonic + noise model (HNM); the second layer (layer 1) reinterprets the harmonic parameters in a source-filter setting. From a compositional point of view, layer 0 decomposes speech into periodic and aperiodic parts, and the periodic part is further decomposed into parts related to glottis and vocal tract in layer 1.
+
+#### More technically intensive introduction
 
 Specifically, the layer 0 parametrization consists of the amplitude and phases of the harmonics, power spectral density of the noise, and another harmonic model describing the temporal shape of the noise. The layer 1 parametrization consists of a temporally and spectrally smooth spectral envelope (for an approximated vocal tract transfer function) and parameters for a glottal model.
 
 The analysis procedure goes as the follows. First the fundamental frequency (F0) is estimated using an external library (e.g. libpyin, Nebula). Given the F0 estimation, libllsm2 extracts layer 0 parameters from the speech. Next and optionally, the user may ask libllsm2 to augment the existing representation with layer 1 parameters.
 
-It goes without saying that synthesis is basically to reverse the analysis steps (layer 1 -> layer 0 -> speech). However, libllsm2 can also directly synthesize from layer 1 without going through the harmonic model, and this is much in the same fashion as inverse FFT based vocoders such as WORLD. The direct synthesis pathway, termed as Pulse-by-Pulse (PbP) synthesis, is carefully implemented to give pretty much the same result as a harmonic model, but has some additional advantages when it comes to parameter modification. Real-time synthesis is also supported for both harmonic and PbP synthesis.
+Synthesis is basically to reverse the analysis steps (layer 1 -> layer 0 -> speech). However, libllsm2 can also directly synthesize from layer 1 without going through the harmonic model, and this is much in the same fashion as inverse FFT based vocoders such as WORLD. The direct synthesis pathway, termed as Pulse-by-Pulse (PbP) synthesis, is carefully implemented to give pretty much the same result as a harmonic model, but has some additional advantages when it comes to parameter modification. Real-time synthesis is also supported for both harmonic and PbP synthesis.
 
 Finally, libllsm2 includes a few helper functions to convert frames into a compact representation (fixed dimensional vectors) for statistical parameteric synthesis. By doing so, you can train HMM or DNN models with libllsm2 features, although this means giving up on some advanced features of libllsm2 (mostly regarding phase preservation and temporal noise shaping).
 
@@ -50,6 +67,10 @@ Examples of using libllsm2 are given in the tests.
 | `test-pbpeffects.c` | Pulse-by-Pulse synthesis with growl effect. |
 | `test-coder.c` | Speech coding and decoding. |
 | `demo-stretch.c` | Time scale modification example. |
+
+### Changes in version 2.1
+
+libllsm 2.1 update involves some algorithmic changes in noise modeling. First, `LLSM_CONF_NOSWARP` is deprecated and `llsm_nmframe.psd` now directly stores the PSD vector without frequency warping. Second, noise PSD is now further split into a steady part stored in `llsm_nmframe.psd` and a residual part desginated `LLSM_FRAME_PSDRES`. This change is due to the observation that some fluctuations in the PSD are smoothened out when the user performs time-scale modifications. To make the most out of libllsm 2.1, users should independently process `llsm_nmframe.psd` and `LLSM_FRAME_PSDRES`.
 
 ### Additional notes on Pulse-by-Pulse synthesis
 
