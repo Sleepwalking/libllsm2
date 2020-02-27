@@ -18,7 +18,6 @@
 */
 
 #include <ciglet/ciglet.h>
-#include <libihnm/ihnm.h>
 
 #include "llsm.h"
 #include "dsputils.h"
