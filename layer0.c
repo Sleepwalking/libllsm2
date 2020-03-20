@@ -601,7 +601,7 @@ static FP_TYPE* llsm_filter_noise(llsm_chunk* src, int nfrm, FP_TYPE thop,
       src_psd[j] += resvec[j] - LOG2IN(LOGRESBIAS);
     FP_TYPE* H = llsm_spectrum_from_envelope(
       src_axis, src_psd, npsd, nspec - 1, fs / 2.0);
-    for(int j = 0; j < nspec; j ++)
+    for(int j = 0; j < nspec - 1; j ++)
       H[j] = exp(DB2LOG(H[j])) / sqrt(env[j] * 44100 / fs + 1e-8);
 
     // filter
